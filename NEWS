@@ -26,6 +26,12 @@ The git version used on Debian 11, PureOS 10, Trisquel 11 and Ubuntu
 22.04 produce another identical tarball.  These two 'git archive'
 outputs are not the same, due to how Git works.
 
+** A use of uninitialized value bug was fixed in idna_to_unicode_4z4z.
+If the call to idna_to_unicode_44i failed due to an out of memory
+condition (malloc() returning NULL) then the code would copy the
+content of allocated but uninitialized memory into the output buffer.
+The bug was found using GCC's static analyzer.
+
 ** The C# Libidn.dll can now be built with .NET as well as Mono/SSCLI.
 
 ** Fix self-check tst-version due to broken strverscmp on Windows/musl.

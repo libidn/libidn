@@ -112,8 +112,8 @@ main (int argc, char **argv)
   if (argv[1][1] == 'e')
     {
       uint32_t input[unicode_max_length];
-      unsigned long codept;
-      char output[ace_max_length + 1], uplus[3];
+      unsigned long codept = 0;
+      char output[ace_max_length + 1], uplus[3] = "";
       int c;
 
       /* Read the input code points: */
