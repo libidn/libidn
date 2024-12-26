@@ -208,6 +208,28 @@ B-Ubuntu2204:
   - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
   - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
+B-Ubuntu2404-arm64:
+  image: ubuntu:24.04
+  tags: [ saas-linux-small-arm64 ]
+  stage: build
+  before_script:
+  - apt-get update -qq
+  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell indent
+  script:
+  - time ./bootstrap --skip-po
+  - time ./configure --enable-java --enable-gcc-warnings=error
+  - grep '^HAVE_DOTNET = 1$' Makefile > /dev/null
+  - grep '^HAVE_MONO = $' Makefile > /dev/null
+  - time make -j$(nproc) syntax-check
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - time make -j$(nproc) distcheck
+  - git status
+  - git diff --exit-code
+  - sha256sum *.tar.*
+  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
+  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
+  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+
 B-Ubuntu2404-release:
   image: ubuntu:24.04
   tags: [ saas-linux-medium-amd64 ]
@@ -267,11 +289,8 @@ B-Ubuntu2404-release:
   - cmp b-trisquel11/*.tar.gz b-ubuntu2204/*.tar.gz
 
 B-Alpine-arm64:
-  rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
   image: alpine:latest
-  tags: [ arm64 ]
+  tags: [ saas-linux-small-arm64 ]
   stage: build
   before_script:
   - apk update
