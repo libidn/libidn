@@ -46,13 +46,14 @@ LLVMFuzzerTestOneInput (const uint8_t *data, size_t size)
       assert (data0 != NULL);
       assert (asc != NULL);
 
-      idna_to_ascii_4i ((uint32_t *) data, size / 4, asc, 0);
-      idna_to_ascii_4i ((uint32_t *) data, size / 4, asc,
+      memcpy (data0, data, size);
+
+      idna_to_ascii_4i (data0, size / 4, asc, 0);
+      idna_to_ascii_4i (data0, size / 4, asc,
 			IDNA_ALLOW_UNASSIGNED | IDNA_USE_STD3_ASCII_RULES);
 
       free (asc);
 
-      memcpy (data0, data, size);
       data0[size / 4] = 0;
       if (idna_to_ascii_4z (data0, &out, 0) == IDNA_SUCCESS)
 	idn_free (out);

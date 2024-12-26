@@ -107,14 +107,23 @@ main (int argc, char **argv)
 
   {
     int rc;
-    char corporadir[sizeof (SRCDIR) + 1 + strlen (target) + 8];
-    snprintf (corporadir, sizeof (corporadir), SRCDIR "/%s.in", target);
+    char *corporadir;
+
+    if (asprintf (&corporadir, SRCDIR "/%s.in", target) < 0)
+      {
+	fprintf (stderr, "malloc failure");
+	return EXIT_FAILURE;
+      }
 
     rc = test_all_from (corporadir);
     if (rc)
       fprintf (stderr, "Failed to find %s\n", corporadir);
 
-    snprintf (corporadir, sizeof (corporadir), SRCDIR "/%s.repro", target);
+    if (asprintf (&corporadir, SRCDIR "/%s.repro", target) < 0)
+      {
+	fprintf (stderr, "malloc failure");
+	return EXIT_FAILURE;
+      }
     test_all_from (corporadir);
     if (test_all_from (corporadir) && rc)
       return 77;		// SKIP
