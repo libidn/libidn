@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2023 Simon Josefsson
+# Copyright (C) 2020-2024 Simon Josefsson
 #
 # This file is part of GNU Libidn.
 #
@@ -24,11 +24,12 @@ workflow:
   - if: $CI_COMMIT_BRANCH
 
 stages:
- - build
- - test
+- quick
+- build
+- repro
+- test
 
 default:
-  interruptible: true
   artifacts:
     expire_in: 2 weeks
     when: always
@@ -38,46 +39,47 @@ default:
     - ./config.h
     - ./**/*.log
 
-B-Debian-mini-testing:
-  image: $CI_REGISTRY/libidn/build-images:libidn-mini-Debian-testing
-  stage: build
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
+Q-Debian-testing:
+  tags: [ saas-linux-medium-amd64 ]
+  image: debian:testing-slim
+  stage: quick
+  before_script:
+  - cat /etc/os-release
+  - time apt-get update
+  - time apt-get install -y git make autoconf automake libtool autopoint gperf gengetopt indent codespell libidn-dev
   script:
-  - apt-get install -y libidn-dev | tail
   - env srcdir=tests tests/standalone.sh
-  - apt-get remove -y --purge libidn-dev | tail
+  - time apt-get remove -y --purge libidn-dev | tail
   - time ./bootstrap --skip-po
   - time ./configure --disable-doc --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) -k V=1
-  - time make -j$(nproc) -k check VERBOSE=t V=1
+  - time make -j$(nproc) V=1
+  - time make -j$(nproc) check VERBOSE=t V=1
   - git status
   - git diff --exit-code # nothing should change version controlled files
   - env srcdir=tests STANDALONE_CFLAGS="-Ilib lib/.libs/libidn.a" tests/standalone.sh
   - env srcdir=tests STANDALONE_CFLAGS="-Ilib -Wl,-rpath lib/.libs lib/.libs/libidn.so" tests/standalone.sh
 
-# https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
+# https://docs.gitlab.com/ee/user/application_security/sast/
 sast:
-  stage: build
+  stage: quick
   variables:
     SAST_EXCLUDED_PATHS: gnulib
 include:
-- template: Security/SAST.gitlab-ci.yml
+  - template: Jobs/SAST.gitlab-ci.yml
 
 # https://www.synopsys.com/blogs/software-security/integrating-coverity-scan-with-gitlab-ci/
 Coverity:
   rules:
   - if: $CI_COMMIT_REF_PROTECTED == "true"
   - when: manual
-  image: $CI_REGISTRY/libidn/build-images:libidn-mini-Debian-testing
+  image: debian:testing-slim
   stage: build
   allow_failure: true
   before_script:
-  - apt-get update -qq -y
-  - apt-get install -y -q curl
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
+  - apt-get update -y
+  - apt-get install -y git make autoconf automake libtool autopoint gperf gengetopt codespell
+  - apt-get install -y curl
   script:
   - test -n "$COVERITY_SCAN_TOKEN" && test -n "$COVERITY_SCAN_PROJECT_NAME"
   - curl -o /tmp/cov-analysis-linux64.tgz https://scan.coverity.com/download/linux64
@@ -104,8 +106,8 @@ Coverity:
     PKGS: patch diffutils autoconf automake libtool gettext-devel git perl make gperf gengetopt transfig texinfo help2man valgrind mono-core texinfo-tex texlive
   before_script:
   - cat /etc/os-release
-  - dnf install -y epel-release
-  - dnf --enablerepo=$(dnf repolist --all | grep crb > /dev/null && echo crb || echo powertools) install -y ${PKGS}
+  - time dnf install -y epel-release
+  - time dnf --enablerepo=$(dnf repolist --all | grep crb > /dev/null && echo crb || echo powertools) install -y ${PKGS}
   - gcc --version
   script:
   - time ./bootstrap --skip-po
@@ -143,8 +145,8 @@ B-RockyLinux9:
     DEBIAN_FRONTEND: noninteractive
   before_script:
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless patch
+  - time apt-get update -qq
+  - time apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless patch
   script:
   - time ./bootstrap --skip-po
   - time ./configure --enable-java --enable-gcc-warnings=error
@@ -167,8 +169,12 @@ B-Debian11:
   extends: .pureosdebian
 
 B-Trisquel11:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Trisquel11
+  image: docker.io/kpengboy/trisquel:11.0
   stage: build
+  before_script:
+  - cat /etc/os-release
+  - apt-get update -y
+  - apt-get install -y make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
   script:
   - time ./bootstrap --skip-po
   - time ./configure --enable-java --enable-gcc-warnings=error
@@ -191,6 +197,7 @@ B-Ubuntu2204:
   variables:
     DEBIAN_FRONTEND: noninteractive
   before_script:
+  - cat /etc/os-release
   - apt-get update -qq
   - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell
   script:
@@ -213,6 +220,7 @@ B-Ubuntu2404-arm64:
   tags: [ saas-linux-small-arm64 ]
   stage: build
   before_script:
+  - cat /etc/os-release
   - apt-get update -qq
   - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell indent
   script:
@@ -237,6 +245,7 @@ B-Ubuntu2404-release:
   except:
     - tags # do-release-commit-and-tag: not on branch
   before_script:
+  - cat /etc/os-release
   - apt-get update -qq
   - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell
   script:
@@ -268,31 +277,12 @@ B-Ubuntu2404-release:
   - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
   - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
-000-reproducibility:
-  stage: test
-  needs: [ B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Debian-testing, B-Fedora-latest, B-Ubuntu-latest, B-Ubuntu2404-release ]
-  script:
-  - cd tar
-  - sha256sum */*.tar.* */src/*.tar.* | sort
-  - sha256sum */*.tar.* */src/*.tar.* | sort | uniq -c -w64 | sort -rn
-  - sha256sum */*.tar.* */src/*.tar.* | grep    -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
-  - sha256sum */*.tar.* */src/*.tar.* | grep -v -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
-  - cmp b-almalinux8/src/*.tar.gz b-almalinux9/src/*.tar.gz
-  - cmp b-almalinux8/src/*.tar.gz b-rockylinux8/src/*.tar.gz
-  - cmp b-almalinux8/src/*.tar.gz b-rockylinux9/src/*.tar.gz
-  - cmp b-debian11/src/*.tar.gz b-pureos10/src/*.tar.gz
-  - cmp b-debian11/src/*.tar.gz b-trisquel11/src/*.tar.gz
-  - cmp b-debian11/src/*.tar.gz b-ubuntu2204/src/*.tar.gz
-  - cmp b-almalinux8/*.tar.gz b-rockylinux8/*.tar.gz
-  - cmp b-almalinux9/*.tar.gz b-rockylinux9/*.tar.gz
-  - cmp b-pureos10/*.tar.gz b-debian11/*.tar.gz
-  - cmp b-trisquel11/*.tar.gz b-ubuntu2204/*.tar.gz
-
 B-Alpine-arm64:
   image: alpine:latest
   tags: [ saas-linux-small-arm64 ]
   stage: build
   before_script:
+  - cat /etc/os-release
   - apk update
   - apk add gcc make libc-dev git autoconf automake libtool gettext-dev gperf gengetopt patch coreutils
   script:
@@ -304,8 +294,12 @@ B-Alpine-arm64:
   - git diff --exit-code # nothing should change version controlled files
 
 B-Debian9:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Debian9
+  image: docker.io/debian/eol:stretch-slim
   stage: build
+  before_script:
+  - printf "deb http://archive.debian.org/debian/ stretch main\ndeb http://archive.debian.org/debian/ stretch-backports main\ndeb http://archive.debian.org/debian-security/ stretch/updates main\n" > /etc/apt/sources.list # https://github.com/debuerreotype/docker-debian-eol-artifacts/issues/10
+  - apt-get update -y
+  - apt-get install -y make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-generic-recommended texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless
   script:
   - time ./bootstrap --skip-po
   - time ./configure --enable-java --enable-gcc-warnings=error
@@ -319,11 +313,11 @@ B-Debian9:
   - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
 B-Debian12:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Debian12
+  image: debian:bookworm-slim
   stage: build
   before_script:
   - apt-get update
-  - apt-get install -y -qq wget
+  - apt-get install -y -q make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless wget
   script:
   - time ./bootstrap
   - time ./configure --enable-java --enable-gcc-warnings=error
@@ -337,10 +331,11 @@ B-Debian12:
   - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
 B-Debian-testing:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Debian-testing
+  image: debian:testing-slim
   stage: build
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
+  before_script:
+  - apt-get update -qq
+  - apt-get install -y -q make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
   script:
   - time ./bootstrap --skip-po
   - time ./configure --enable-java --enable-gcc-warnings=error
@@ -358,10 +353,12 @@ B-Debian-testing:
   - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
 B-Fedora-latest:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Fedora-latest
+  image: fedora:latest
   stage: build
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
+  before_script:
+  - cat /etc/os-release
+  - dnf update -y
+  - dnf install -y make git patch autoconf automake libtool gettext-devel cvs texinfo texinfo-tex texlive help2man gtk-doc gengetopt dblatex valgrind gperf java-latest-openjdk-devel mono-devel codespell
   script:
   - time ./bootstrap --skip-po
   - time ./configure --enable-java --enable-gcc-warnings=error
@@ -373,21 +370,7 @@ B-Fedora-latest:
   - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
   - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
-B-Ubuntu-latest:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Ubuntu-latest
-  stage: build
-  script:
-  - time ./bootstrap --skip-po
-  - time ./configure --enable-java --enable-gcc-warnings=error
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - time make -j$(nproc) distcheck
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
-
-# https://docs.gitlab.com/ee/ci/runners/saas/macos/environment.html
+# https://docs.gitlab.com/ee/ci/runners/hosted_runners/macos.html
 B-MacOS14Xcode15:
   rules:
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -411,30 +394,30 @@ B-MacOS14Xcode15:
   - make -j$(nproc) check -k V=1 VERBOSE=t
   - git diff --exit-code # nothing should change version controlled files
 
-macOS13Xcode14:
-  rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
-  image: macos-13-xcode-14
-  tags: [ saas-macos-medium-m1 ]
-  stage: test
-  needs: [B-Trisquel11]
-  variables:
-    WERROR_CFLAGS: "-Wno-error=format-nonliteral -Wno-error=format-security"
+B-Ubuntu-rolling:
+  image: ubuntu:rolling
+  stage: build
+  before_script:
+  - cat /etc/os-release
+  - apt-get update
+  - apt-get install -y make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
   script:
-  - gzip -cd tar/b-trisquel11/libidn-*.tar.gz | tar xf -
-  - cd $(gzip -cd tar/b-trisquel11/libidn-*.tar.gz | tar tf - | head -n1)
-  - mkdir b
-  - cd b
-  - ../configure --enable-gcc-warnings=error
-  - make -j$(nproc) syntax-check
-  - make -j$(nproc) V=1 check -k VERBOSE=t
+  - time ./bootstrap --skip-po
+  - time ./configure --enable-java --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - time make -j$(nproc) distcheck
+  - git diff --exit-code # nothing should change version controlled files
+  - sha256sum *.tar.*
+  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
+  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
+  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
 
 B-clang:
   image: silkeh/clang:latest
   stage: build
   before_script:
   - clang --version
+  - cat /etc/os-release
   - apt-get update -qq
   - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs help2man gengetopt gperf
   script:
@@ -448,10 +431,9 @@ B-clang:
 B-gcc:
   image: gcc:latest
   stage: build
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
   before_script:
   - gcc --version
+  - cat /etc/os-release
   - apt-get update -qqy
   - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs help2man valgrind gengetopt gperf
   script:
@@ -463,7 +445,7 @@ B-gcc:
   - time make -j$(nproc) check VERBOSE=t
   - git diff --exit-code # nothing should change version controlled files
 
-# https://docs.gitlab.com/ee/ci/runners/saas/windows_saas_runner.html
+# https://docs.gitlab.com/ee/ci/runners/hosted_runners/windows.html
 B-Windows-UCRT64:
   rules:
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -471,7 +453,7 @@ B-Windows-UCRT64:
   tags: [ saas-windows-medium-amd64 ]
   stage: build
   variables:
-    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format -Wno-error=analyzer-use-of-uninitialized-value"
+    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script: # https://www.msys2.org/docs/ci/#other-systems
   - wget.exe -nv -O msys2.exe https://github.com/msys2/msys2-installer/releases/download/nightly-x86_64/msys2-base-x86_64-latest.sfx.exe
   - ./msys2.exe -y -oC:\
@@ -489,62 +471,81 @@ B-Windows-UCRT64:
     make -j$(nproc) V=1 -k check VERBOSE=t'
   - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
 
-Windows-MSYS:
-  rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
-  tags: [ saas-windows-medium-amd64 ]
-  stage: test
-  needs: [B-Trisquel11]
-  variables:
-    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=attributes -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=analyzer-use-of-uninitialized-value"
-  script: # https://www.msys2.org/docs/ci/#other-systems
-  - wget.exe -nv -O msys2.exe https://github.com/msys2/msys2-installer/releases/download/nightly-x86_64/msys2-base-x86_64-latest.sfx.exe
-  - ./msys2.exe -y -oC:\
-  - Remove-Item msys2.exe
-  - $env:CHERE_INVOKING = 'yes'
-  - $env:MSYSTEM = 'MSYS' # https://www.msys2.org/docs/environments/
-  - C:\msys64\usr\bin\bash -lc ' '
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - |
-    C:\msys64\usr\bin\bash -lcx '
-    pacman --noconfirm -Syu make gcc
-    tar xfa tar/b-trisquel11/libidn-*.tar.gz
-    cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-    ./configure --enable-gcc-warnings=error --disable-doc
-    make -j$(nproc) V=1 -k check VERBOSE=t'
-  - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
-
-Windows-MINGW64:
-  rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
-  tags: [ saas-windows-medium-amd64 ]
-  stage: test
-  needs: [B-Trisquel11]
-  variables:
-    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format -Wno-error=analyzer-use-of-uninitialized-value"
-  script: # https://www.msys2.org/docs/ci/#other-systems
-  - wget.exe -nv -O msys2.exe https://github.com/msys2/msys2-installer/releases/download/nightly-x86_64/msys2-base-x86_64-latest.sfx.exe
-  - ./msys2.exe -y -oC:\
-  - Remove-Item msys2.exe
-  - $env:CHERE_INVOKING = 'yes'
-  - $env:MSYSTEM = 'MINGW64' # https://www.msys2.org/docs/environments/
-  - C:\msys64\usr\bin\bash -lc ' '
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - |
-    C:\msys64\usr\bin\bash -lcx '
-    pacman --noconfirm -Syu make mingw-w64-x86_64-gcc
-    tar xfa tar/b-trisquel11/libidn-*.tar.gz
-    cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-    ./configure --enable-gcc-warnings=error --disable-doc
-    make -j$(nproc) V=1 -k check VERBOSE=t'
-  - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
+tarball-repro-check:
+  stage: repro
+  needs: [ B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Debian-testing, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404-release ]
+  script:
+  - cd tar
+  - sha256sum */*.tar.* */src/*.tar.* | sort
+  - sha256sum */*.tar.* */src/*.tar.* | sort | uniq -c -w64 | sort -rn
+  - sha256sum */*.tar.* */src/*.tar.* | grep    -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
+  - sha256sum */*.tar.* */src/*.tar.* | grep -v -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
+  - cmp b-almalinux8/src/*.tar.gz b-almalinux9/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-rockylinux8/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-rockylinux9/src/*.tar.gz
+  - cmp b-debian11/src/*.tar.gz b-pureos10/src/*.tar.gz
+  - cmp b-debian11/src/*.tar.gz b-trisquel11/src/*.tar.gz
+  - cmp b-debian11/src/*.tar.gz b-ubuntu2204/src/*.tar.gz
+  - cmp b-almalinux8/*.tar.gz b-rockylinux8/*.tar.gz
+  - cmp b-almalinux9/*.tar.gz b-rockylinux9/*.tar.gz
+  - cmp b-pureos10/*.tar.gz b-debian11/*.tar.gz
+  - cmp b-trisquel11/*.tar.gz b-ubuntu2204/*.tar.gz
 
 AlmaLinux8:
   image: almalinux:8
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - dnf -y install make gcc diffutils valgrind
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+AlmaLinux10:
+  image: almalinux:10-kitten
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - dnf -y install make gcc diffutils valgrind gzip
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+AlmaLinux10-clang:
+  image: almalinux:10-kitten
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - dnf -y install make clang diffutils valgrind gzip
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure CC=clang --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+AlmaLinux10-arm64:
+  image: almalinux:10-kitten
+  tags: [ saas-linux-small-arm64 ]
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - dnf -y install make gcc diffutils valgrind gzip
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+AlmaLinux10-ppc64:
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  tags: [ ppc64 ]
+  image: almalinux:10-kitten
   stage: test
   needs: [B-Trisquel11]
   before_script:
@@ -560,6 +561,7 @@ Alpine-mold:
   stage: test
   needs: [B-Trisquel11]
   before_script:
+  - cat /etc/os-release
   - apk update
   - apk add build-base mold
   variables:
@@ -576,9 +578,8 @@ ArchLinux:
   image: archlinux:latest
   stage: test
   needs: [B-Trisquel11]
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
   before_script:
+  - cat /etc/os-release
   - pacman -Syu --noconfirm make gcc diffutils
   script:
   - tar xfz tar/b-trisquel11/libidn-*.tar.gz
@@ -588,11 +589,31 @@ ArchLinux:
   - time ../configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
+Armcross:
+  image: debian:12-slim
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - apt-get update -qq
+  - apt-get install -y -qq make gcc-arm-linux-gnueabi qemu-user qemu-user-binfmt file binfmt-support
+  - update-binfmts --enable qemu-arm
+  script:
+  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - mkdir b
+  - cd b
+  - ../configure --enable-gcc-warnings=error --host=arm-linux-gnueabi CFLAGS="-static --static"
+  - make -j$(nproc) V=1
+  - file src/idn
+  - LANG=C.UTF-8 qemu-arm src/idn --debug foo
+  - time make -k -j$(nproc) check V=1 VERBOSE=t
+
 OracleLinux7:
   image: oraclelinux:7
   stage: test
   needs: [B-Trisquel11]
   before_script:
+  - cat /etc/os-release
   - yum -y install make gcc diffutils valgrind
   script:
   - tar xfa tar/b-trisquel11/libidn-*.tar.gz
@@ -644,6 +665,7 @@ Debian10:
   stage: test
   needs: [B-Trisquel11]
   before_script:
+  - cat /etc/os-release
   - apt-get update
   - apt-get install -y -qq make gcc
   script:
@@ -654,73 +676,32 @@ Debian10:
   - time ../configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
+Debian12-ppc64:
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  tags: [ ppc64 ]
+  image: debian:12
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - cat /etc/os-release
+  - dnf -y install make gcc valgrind
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
 Fedora-latest:
   image: fedora:latest
   stage: test
   needs: [B-Trisquel11]
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
   before_script:
+  - cat /etc/os-release
   - dnf -y install make gcc diffutils valgrind
   script:
   - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-  - time ./configure --enable-gcc-warnings=error
-  - time make -j$(nproc) check V=1 VERBOSE=t
-
-Ubuntu12.04:
-  image: ubuntu:12.04
-  stage: test
-  needs: [B-Trisquel11]
-  before_script:
-  - perl -pi -e 's/archive.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
-  - apt-get update -q
-  - apt-get install -y -qq make gcc valgrind
-  script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-  - time ./configure --enable-gcc-warnings=error
-  - time make -j$(nproc) check V=1 VERBOSE=t
-
-Ubuntu14.04:
-  image: ubuntu:14.04
-  stage: test
-  needs: [B-Trisquel11]
-  before_script:
-  - apt-get update -qq
-  - apt-get install -y -qq make gcc valgrind
-  script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-  - time ./configure --disable-tld --enable-gcc-warnings=error
-  - time make -j$(nproc) check V=1 VERBOSE=t
-
-Ubuntu-rolling:
-  image: ubuntu:rolling
-  stage: test
-  needs: [B-Trisquel11]
-  before_script:
-  - apt-get update -qq
-  - apt-get install -y -qq git make gcc valgrind gtk-doc-tools texinfo texlive texlive-plain-generic
-  script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-  - time ./configure --enable-gcc-warnings=error
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - make -j$(nproc) distcheck
-
-RockyLinux9-ppc64:
-  rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
-  image: rockylinux:9
-  tags: [ ppc64 ]
-  stage: test
-  needs: [B-Trisquel11]
-  before_script:
-  - dnf -y install make gcc valgrind
-  script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
   - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
@@ -735,7 +716,7 @@ Mingw32:
   - apt-get install -y -qq make mingw-w64 wine wine32 libwine libwine:i386 binfmt-support wine-binfmt
   - update-binfmts --enable wine
   variables:
-    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format -Wno-error=analyzer-use-of-uninitialized-value"
+    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script:
   - tar xfz tar/b-trisquel11/libidn-*.tar.gz
   - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
@@ -753,7 +734,7 @@ Mingw64:
   - apt-get install -y -qq make mingw-w64 wine wine64 binfmt-support wine-binfmt
   - update-binfmts --enable wine
   variables:
-    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format -Wno-error=analyzer-use-of-uninitialized-value"
+    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script:
   - tar xfz tar/b-trisquel11/libidn-*.tar.gz
   - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
@@ -762,30 +743,146 @@ Mingw64:
   - time ../configure --enable-gcc-warnings=error --host=x86_64-w64-mingw32
   - time make -k -j$(nproc) check V=1 VERBOSE=t
 
-Armcross:
-  image: debian:12-slim
+RockyLinux9-ppc64:
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  tags: [ ppc64 ]
+  image: rockylinux:9
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - apt-get update -qq
-  - apt-get install -y -qq make gcc-arm-linux-gnueabi qemu-user qemu-user-binfmt file binfmt-support
-  - update-binfmts --enable qemu-arm
+  - cat /etc/os-release
+  - dnf -y install make gcc valgrind
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
   - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+Ubuntu12.04:
+  image: ubuntu:12.04
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - cat /etc/os-release
+  - perl -pi -e 's/archive.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
+  - apt-get update -q
+  - apt-get install -y -qq make gcc valgrind
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+Ubuntu14.04:
+  image: ubuntu:14.04
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - cat /etc/os-release
+  - apt-get update -qq
+  - apt-get install -y -qq make gcc valgrind
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --disable-tld --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+Ubuntu-rolling:
+  image: ubuntu:rolling
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - cat /etc/os-release
+  - apt-get update -qq
+  - apt-get install -y -qq git make gcc valgrind gtk-doc-tools texinfo texlive texlive-plain-generic
+  script:
+  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - make -j$(nproc) distcheck
+
+Windows-MSYS:
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  tags: [ saas-windows-medium-amd64 ]
+  stage: test
+  needs: [B-Trisquel11]
+  variables:
+    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=attributes -Wno-error=format-nonliteral -Wno-error=format-security"
+  script: # https://www.msys2.org/docs/ci/#other-systems
+  - wget.exe -nv -O msys2.exe https://github.com/msys2/msys2-installer/releases/download/nightly-x86_64/msys2-base-x86_64-latest.sfx.exe
+  - ./msys2.exe -y -oC:\
+  - Remove-Item msys2.exe
+  - $env:CHERE_INVOKING = 'yes'
+  - $env:MSYSTEM = 'MSYS' # https://www.msys2.org/docs/environments/
+  - C:\msys64\usr\bin\bash -lc ' '
+  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
+  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
+  - |
+    C:\msys64\usr\bin\bash -lcx '
+    pacman --noconfirm -Syu make gcc
+    tar xfa tar/b-trisquel11/libidn-*.tar.gz
+    cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+    ./configure --enable-gcc-warnings=error --disable-doc
+    make -j$(nproc) V=1 -k check VERBOSE=t'
+  - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
+
+Windows-MINGW64:
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  tags: [ saas-windows-medium-amd64 ]
+  stage: test
+  needs: [B-Trisquel11]
+  variables:
+    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
+  script: # https://www.msys2.org/docs/ci/#other-systems
+  - wget.exe -nv -O msys2.exe https://github.com/msys2/msys2-installer/releases/download/nightly-x86_64/msys2-base-x86_64-latest.sfx.exe
+  - ./msys2.exe -y -oC:\
+  - Remove-Item msys2.exe
+  - $env:CHERE_INVOKING = 'yes'
+  - $env:MSYSTEM = 'MINGW64' # https://www.msys2.org/docs/environments/
+  - C:\msys64\usr\bin\bash -lc ' '
+  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
+  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
+  - |
+    C:\msys64\usr\bin\bash -lcx '
+    pacman --noconfirm -Syu make mingw-w64-x86_64-gcc
+    tar xfa tar/b-trisquel11/libidn-*.tar.gz
+    cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+    ./configure --enable-gcc-warnings=error --disable-doc
+    make -j$(nproc) V=1 -k check VERBOSE=t'
+  - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
+
+macOS13Xcode14:
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  image: macos-13-xcode-14
+  tags: [ saas-macos-medium-m1 ]
+  stage: test
+  needs: [B-Trisquel11]
+  variables:
+    WERROR_CFLAGS: "-Wno-error=format-nonliteral -Wno-error=format-security"
+  script:
+  - gzip -cd tar/b-trisquel11/libidn-*.tar.gz | tar xf -
+  - cd $(gzip -cd tar/b-trisquel11/libidn-*.tar.gz | tar tf - | head -n1)
   - mkdir b
   - cd b
-  - ../configure --enable-gcc-warnings=error --host=arm-linux-gnueabi CFLAGS="-static --static"
-  - make -j$(nproc) V=1
-  - file src/idn
-  - LANG=C.UTF-8 qemu-arm src/idn --debug foo
-  - time make -k -j$(nproc) check V=1 VERBOSE=t
+  - ../configure --enable-gcc-warnings=error
+  - make -j$(nproc) syntax-check
+  - make -j$(nproc) V=1 check -k VERBOSE=t
 
 .pages:
-  image: $CI_REGISTRY/libidn/build-images:libidn-Debian-testing
+  image: debian:testing-slim
   stage: build
-  variables:
-    WERROR_CFLAGS: "-Wno-error=analyzer-use-of-uninitialized-value"
+  before_script:
+  - apt-get update -qq
+  - apt-get install -y -q make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
   script:
   - time ./bootstrap --skip-po
   - time ./configure --enable-gcc-warnings=error --enable-java --enable-gtk-doc --enable-gtk-doc-pdf
