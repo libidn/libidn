@@ -44,7 +44,7 @@ TAR_OPTIONS += --mode=go+u,go-w --mtime=$(abs_top_srcdir)/NEWS --format=posix
 
 aximport:
 	for f in m4/ax_*.m4; do \
-		wget -O $$f "https://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=$$f"; \
+		wget -nv -O $$f "https://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=$$f"; \
 	done
 
 review-diff:
