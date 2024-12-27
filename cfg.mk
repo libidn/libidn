@@ -64,9 +64,15 @@ my-update-copyright:
 	make update-copyright update-copyright-env='UPDATE_COPYRIGHT_HOLDER="Simon Josefsson" UPDATE_COPYRIGHT_USE_INTERVALS=1'
 	perl -pi -e "s/2002-20.. Simon Josefsson/2002-`(date +%Y)` Simon Josefsson/" doc/Makefile.am src/idn.c
 
+CODESPELL_IGNORE_WORDS_LIST = meu,bu,te,ba,noe,nwe,mye,myu,tye,tim,ede,wich
+exclude_file_name_regexp--sc_codespell = '^gnulib|doc/specifications/.*|doc/gdoc|fuzz/libidn_(stringprep|toascii|tounicode)_fuzzer.in/.*$$'
 sc_codespell:
-	@if `which codespell > /dev/null`; then \
-		codespell -L meu,bu,te,ba,noe,nwe,mye,myu,tye,tim,ede,wich `git -C $(srcdir) ls-files|egrep -v '^gnulib|doc/specifications/.*|doc/gdoc|fuzz/libidn_(stringprep|toascii|tounicode)_fuzzer.in/.*$$'`; \
+	@if ! command -v codespell > /dev/null; then			\
+	   echo 1>&2 '$(ME): sc_codespell: codespell is missing';	\
+	else								\
+	   codespell --ignore-words-list $(CODESPELL_IGNORE_WORDS_LIST)	\
+		$$(git -C $(srcdir) ls-files | egrep -v			\
+			$(exclude_file_name_regexp--sc_codespell));	\
 	fi
 
 sc_libtool_version_bump:
