@@ -34,10 +34,15 @@ default:
     expire_in: 2 weeks
     when: always
     paths:
-    - ./tar/**
-    - ./*.log
-    - ./config.h
-    - ./**/*.log
+    - ./out/**
+
+.gnulib-fetch:
+  script:
+  - GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
+  - wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
+  - gzip -cd gnulib-mirror-$GNULIB_REVISION.tar.gz | tar xf -
+  - rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
+  - export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
 
 Q-Debian-testing:
   tags: [ saas-linux-medium-amd64 ]
@@ -46,19 +51,28 @@ Q-Debian-testing:
   before_script:
   - cat /etc/os-release
   - time apt-get update
-  - time apt-get install -y git make autoconf automake libtool autopoint gperf gengetopt indent codespell libidn-dev
+  - time apt-get install -y git wget make autoconf automake libtool autopoint gperf gengetopt indent codespell libidn-dev | tee pkgs.log | tail
   script:
   - env srcdir=tests tests/standalone.sh
   - time apt-get remove -y --purge libidn-dev | tail
-  - time ./bootstrap --skip-po
-  - time ./configure --disable-doc --enable-gcc-warnings=error
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - mkdir -pv q
+  - cd q
+  - time ../configure --disable-doc --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) V=1
   - time make -j$(nproc) check VERBOSE=t V=1
+  - make srcdist
   - git status
   - git diff --exit-code # nothing should change version controlled files
-  - env srcdir=tests STANDALONE_CFLAGS="-Ilib lib/.libs/libidn.a" tests/standalone.sh
-  - env srcdir=tests STANDALONE_CFLAGS="-Ilib -Wl,-rpath lib/.libs lib/.libs/libidn.so" tests/standalone.sh
+  - env srcdir=../tests STANDALONE_CFLAGS="-I../lib -Ilib lib/.libs/libidn.a" ../tests/standalone.sh
+  - env srcdir=../tests STANDALONE_CFLAGS="-I../lib -Ilib -Wl,-rpath lib/.libs lib/.libs/libidn.so" ../tests/standalone.sh
+  - sha256sum *.tar.*
+  - mkdir -pv ../out/$CI_JOB_NAME_SLUG/{src,log}
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} ../out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* ../out/$CI_JOB_NAME_SLUG/
+  - mv -v ../out/$CI_JOB_NAME_SLUG/*-src.tar.* ../out/$CI_JOB_NAME_SLUG/src/
 
 # https://docs.gitlab.com/ee/user/application_security/sast/
 sast:
@@ -77,16 +91,16 @@ Coverity:
   stage: build
   allow_failure: true
   before_script:
-  - apt-get update -y
-  - apt-get install -y git make autoconf automake libtool autopoint gperf gengetopt codespell
-  - apt-get install -y curl
+  - time apt-get update -y
+  - time apt-get install -y curl git wget make autoconf automake libtool autopoint gperf gengetopt codespell | tee pkgs.log | tail
   script:
   - test -n "$COVERITY_SCAN_TOKEN" && test -n "$COVERITY_SCAN_PROJECT_NAME"
   - curl -o /tmp/cov-analysis-linux64.tgz https://scan.coverity.com/download/linux64
     --form project=$COVERITY_SCAN_PROJECT_NAME --form token=$COVERITY_SCAN_TOKEN
   - sha1sum /tmp/cov-analysis-linux64.tgz
   - tar xfz /tmp/cov-analysis-linux64.tgz
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-gcc-warnings=error --disable-doc CFLAGS="-g -Og"
   - cov-analysis-linux64-*/bin/cov-build --dir cov-int make -j$(nproc) check
   - tar cfz cov-int.tar.gz cov-int
@@ -103,14 +117,15 @@ Coverity:
   stage: build
   tags: [ saas-linux-medium-amd64 ]
   variables:
-    PKGS: patch diffutils autoconf automake libtool gettext-devel git perl make gperf gengetopt transfig texinfo help2man valgrind mono-core texinfo-tex texlive
+    PKGS: patch diffutils autoconf automake libtool gettext-devel git wget perl make gperf gengetopt transfig texinfo help2man valgrind mono-core texinfo-tex texlive
   before_script:
   - cat /etc/os-release
   - time dnf install -y epel-release
-  - time dnf --enablerepo=$(dnf repolist --all | grep crb > /dev/null && echo crb || echo powertools) install -y ${PKGS}
+  - time dnf --enablerepo=$(dnf repolist --all | grep crb > /dev/null && echo crb || echo powertools) install -y ${PKGS} | tee pkgs.log | tail
   - gcc --version
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-gcc-warnings=error
   - time make syntax-check
   - time make -j$(nproc) V=1 VERBOSE=t check
@@ -118,9 +133,10 @@ Coverity:
   - git status
   - git diff --exit-code
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-AlmaLinux8:
   image: almalinux:8
@@ -146,9 +162,10 @@ B-RockyLinux9:
   before_script:
   - cat /etc/os-release
   - time apt-get update -qq
-  - time apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless patch
+  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless patch | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) check V=1 VERBOSE=t
@@ -156,9 +173,10 @@ B-RockyLinux9:
   - git status
   - git diff --exit-code
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-PureOS10:
   image: pureos/byzantium:latest
@@ -173,22 +191,26 @@ B-Trisquel11:
   stage: build
   before_script:
   - cat /etc/os-release
-  - apt-get update -y
-  - apt-get install -y make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
+  - time apt-get update -y
+  - time apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
-  - time ./configure --enable-java --enable-gcc-warnings=error
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --no-git
+  - mkdir ../b
+  - cd ../b
+  - time ../libidn/configure --enable-java --enable-gcc-warnings=error
   - grep '^HAVE_DOTNET = $' Makefile > /dev/null
   - grep '^HAVE_MONO = 1$' Makefile > /dev/null
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck
-  - git status
-  - git diff --exit-code
+  - git -C ../libidn status
+  - git -C ../libidn diff --exit-code
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv ../libidn/out/$CI_JOB_NAME_SLUG/src ../libidn/out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} ../libidn/out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* ../libidn/out/$CI_JOB_NAME_SLUG/
+  - mv ../libidn/out/$CI_JOB_NAME_SLUG/*-src.tar.* ../libidn/out/$CI_JOB_NAME_SLUG/src/
 
 B-Ubuntu2204:
   image: ubuntu:22.04
@@ -198,22 +220,26 @@ B-Ubuntu2204:
     DEBIAN_FRONTEND: noninteractive
   before_script:
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell
+  - time apt-get update -qq
+  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell datefudge | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
-  - time ./configure --enable-java --enable-gcc-warnings=error
+  - !reference [.gnulib-fetch, script]
+  - ./bootstrap --no-git
+  - mkdir b
+  - cd b
+  - time datefudge "15 years" ../configure --enable-java --enable-gcc-warnings=error
   - grep '^HAVE_DOTNET = 1$' Makefile > /dev/null
   - grep '^HAVE_MONO = $' Makefile > /dev/null
-  - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - time make -j$(nproc) distcheck
+  - time datefudge "15 years" make -j$(nproc) syntax-check exclude_file_name_regexp--sc_copyright_check='version-etc.c|doc/libidn.texi'
+  - time datefudge "15 years" make -j$(nproc) check V=1 VERBOSE=t
+  - time datefudge "15 years" make -j$(nproc) distcheck
   - git status
   - git diff --exit-code
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv ../out/$CI_JOB_NAME_SLUG/{src,log}
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} ../out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* ../out/$CI_JOB_NAME_SLUG/
+  - mv ../out/$CI_JOB_NAME_SLUG/*-src.tar.* ../out/$CI_JOB_NAME_SLUG/src/
 
 B-Ubuntu2404-arm64:
   image: ubuntu:24.04
@@ -221,10 +247,11 @@ B-Ubuntu2404-arm64:
   stage: build
   before_script:
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell indent
+  - time apt-get update -qq
+  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell indent | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - grep '^HAVE_DOTNET = 1$' Makefile > /dev/null
   - grep '^HAVE_MONO = $' Makefile > /dev/null
@@ -234,9 +261,10 @@ B-Ubuntu2404-arm64:
   - git status
   - git diff --exit-code
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-Ubuntu2404-release:
   image: ubuntu:24.04
@@ -246,10 +274,11 @@ B-Ubuntu2404-release:
     - tags # do-release-commit-and-tag: not on branch
   before_script:
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell
+  - time apt-get update -qq
+  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error --disable-silent-rules
   - grep '^HAVE_DOTNET = 1$' Makefile > /dev/null
   - grep '^HAVE_MONO = $' Makefile > /dev/null
@@ -258,7 +287,7 @@ B-Ubuntu2404-release:
   - time make -j$(nproc) distcheck
   - git status
   - git diff --exit-code # nothing should change version controlled files
-  - apt-get install -y -q gpg gpgv
+  - time apt-get install -y -q gpg gpgv
   - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
   - git checkout $CI_COMMIT_BRANCH
   - git config user.email "pipeline@example.org"
@@ -273,9 +302,11 @@ B-Ubuntu2404-release:
   - cat -n ~/announce-*-17.42.23
   - git diff --exit-code # nothing should change version controlled files
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*17.42.23* out/$CI_JOB_NAME_SLUG/rel/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-Alpine-arm64:
   image: alpine:latest
@@ -284,91 +315,145 @@ B-Alpine-arm64:
   before_script:
   - cat /etc/os-release
   - apk update
-  - apk add gcc make libc-dev git autoconf automake libtool gettext-dev gperf gengetopt patch coreutils
+  - apk add gcc make libc-dev git wget autoconf automake libtool gettext-dev gperf gengetopt patch coreutils
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --disable-doc --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) V=1
   - time make -j$(nproc) check V=1 VERBOSE=t
   - git diff --exit-code # nothing should change version controlled files
 
+B-Alpine-mold:
+  image: alpine:latest
+  tags: [ saas-linux-small-arm64 ]
+  stage: build
+  before_script:
+  - cat /etc/os-release
+  - apk update
+  - apk add gcc make libc-dev git wget autoconf automake libtool gettext-dev gperf gengetopt patch coreutils mold
+  script:
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --disable-doc --enable-gcc-warnings=error CC='cc -fuse-ld=mold'
+  - time make -j$(nproc) syntax-check
+  - time make -j$(nproc) V=1
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - git diff --exit-code # nothing should change version controlled files
+  - (! grep -E 'mold. warning' build.log)
+  - grep 'mold ' lib/.libs/libidn.so
+
 B-Debian9:
   image: docker.io/debian/eol:stretch-slim
   stage: build
   before_script:
   - printf "deb http://archive.debian.org/debian/ stretch main\ndeb http://archive.debian.org/debian/ stretch-backports main\ndeb http://archive.debian.org/debian-security/ stretch/updates main\n" > /etc/apt/sources.list # https://github.com/debuerreotype/docker-debian-eol-artifacts/issues/10
-  - apt-get update -y
-  - apt-get install -y make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-generic-recommended texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless
+  - time apt-get update -y
+  - time apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-generic-recommended texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) dist
   - time make -j$(nproc) syntax-check
   - git diff --exit-code # nothing should change version controlled files
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-Debian12:
   image: debian:bookworm-slim
   stage: build
   before_script:
-  - apt-get update
-  - apt-get install -y -q make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless wget
+  - time apt-get update
+  - time apt-get install -y -q make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless wget | tee pkgs.log | tail
   script:
-  - time ./bootstrap
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check V=1 VERBOSE=t
+  - time make -j$(nproc) check VERBOSE=t
   - time make -j$(nproc) dist
   - git diff --exit-code # nothing should change version controlled files
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-Debian-testing:
   image: debian:testing-slim
   stage: build
   before_script:
-  - apt-get update -qq
-  - apt-get install -y -q make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
+  - time apt-get update -qq
+  - time apt-get install -y -q make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck
   - make -j$(nproc) install
-  - apt-get install -y -qq man
+  - time apt-get install -y -qq man
   - git clone --depth=1 https://salsa.debian.org/debian/libidn.git debian-libidn
   - debian-libidn/debian/tests/idn
   - debian-libidn/debian/tests/libidn
   - git diff --exit-code # nothing should change version controlled files
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-Fedora-latest:
   image: fedora:latest
   stage: build
   before_script:
   - cat /etc/os-release
-  - dnf update -y
-  - dnf install -y make git patch autoconf automake libtool gettext-devel cvs texinfo texinfo-tex texlive help2man gtk-doc gengetopt dblatex valgrind gperf java-latest-openjdk-devel mono-devel codespell
+  - time dnf update -y
+  - time dnf install -y make git wget patch autoconf automake libtool gettext-devel cvs texinfo texinfo-tex texlive help2man gtk-doc gengetopt dblatex valgrind gperf java-latest-openjdk-devel mono-devel codespell | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck
   - git diff --exit-code # nothing should change version controlled files
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
+
+B-Guix:
+  image: registry.gitlab.com/debdistutils/guix/container:latest
+  stage: build
+  before_script:
+  - cp -rL /gnu/store/*profile/etc/* /etc/
+  - echo 'root:x:0:0:root:/:/bin/sh' >> /etc/passwd
+  - groupadd --system guixbuild
+  - for i in $(seq -w 1 10); do useradd -g guixbuild -G guixbuild -d /var/empty -s $(command -v nologin) -c "Guix build user $i" --system guixbuilder$i; done
+  - export HOME=/
+  - env LANG=C.UTF-8 guix-daemon --build-users-group=guixbuild &
+  - guix archive --authorize < /share/guix/ci.guix.gnu.org.pub
+  - guix archive --authorize < /share/guix/bordeaux.guix.gnu.org.pub
+  - guix describe
+  - time guix install --verbosity=0 gcc-toolchain libtool gengetopt gperf perl patch sed findutils autoconf automake make grep m4  gawk gettext tar xz diffutils python help2man pkgconf pkg-config python-codespell indent # gtk-doc texinfo fig2dev
+  - GUIX_PROFILE="//.guix-profile"
+  - . "$GUIX_PROFILE/etc/profile"
+  script:
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --disable-doc --enable-gcc-warnings=error
+  - time make -j$(nproc) syntax-check
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - git diff --exit-code # nothing should change version controlled files
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
 
 # https://docs.gitlab.com/ee/ci/runners/hosted_runners/macos.html
 B-MacOS14Xcode15:
@@ -385,10 +470,11 @@ B-MacOS14Xcode15:
     HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
     WERROR_CFLAGS: "-Wno-error=format-nonliteral -Wno-error=format-security"
   before_script:
-  - brew install autoconf automake libtool gengetopt help2man texinfo fig2dev coreutils
+  - brew install wget autoconf automake libtool gengetopt help2man texinfo fig2dev coreutils
   script:
   - PATH="$HOMEBREW_PREFIX/opt/coreutils/libexec/gnubin:$PATH"; export PATH
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-gcc-warnings=error
   - make -j$(nproc) syntax-check
   - make -j$(nproc) check -k V=1 VERBOSE=t
@@ -399,18 +485,20 @@ B-Ubuntu-rolling:
   stage: build
   before_script:
   - cat /etc/os-release
-  - apt-get update
-  - apt-get install -y make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
+  - time apt-get update
+  - time apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck
   - git diff --exit-code # nothing should change version controlled files
   - sha256sum *.tar.*
-  - mkdir -pv tar/$CI_JOB_NAME_SLUG/src
-  - mv -v *.tar.* tar/$CI_JOB_NAME_SLUG/
-  - mv tar/$CI_JOB_NAME_SLUG/*-src.tar.* tar/$CI_JOB_NAME_SLUG/src/
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - mv -v out/$CI_JOB_NAME_SLUG/*-src.tar.* out/$CI_JOB_NAME_SLUG/src/
 
 B-clang:
   image: silkeh/clang:latest
@@ -418,11 +506,12 @@ B-clang:
   before_script:
   - clang --version
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs help2man gengetopt gperf
+  - time apt-get update -qq
+  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs help2man gengetopt gperf | tee pkgs.log | tail
   script:
   - clang --version
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure CC="clang -std=gnu2x" --enable-gcc-warnings=error --disable-doc
   - time make -j$(nproc) V=1
   - time make -j$(nproc) check V=1 VERBOSE=t
@@ -434,11 +523,12 @@ B-gcc:
   before_script:
   - gcc --version
   - cat /etc/os-release
-  - apt-get update -qqy
-  - apt-get install -qqy --no-install-recommends make git autoconf automake libtool gettext autopoint cvs help2man valgrind gengetopt gperf
+  - time apt-get update -qqy
+  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs help2man valgrind gengetopt gperf | tee pkgs.log | tail
   script:
   - gcc --version
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure CC="gcc -std=gnu2x" --enable-gcc-warnings=error --disable-doc
   - time make -j$(nproc) V=1
   - time make -j$(nproc) syntax-check
@@ -465,41 +555,120 @@ B-Windows-UCRT64:
   - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
   - |
     C:\msys64\usr\bin\bash -lcx '
-    pacman --noconfirm -Syu git autoconf automake libtool make mingw-w64-ucrt-x86_64-gcc gtk-doc help2man gengetopt gperf patch gettext-devel
-    ./bootstrap --skip-po
+    pacman --noconfirm -Syu git wget autoconf automake libtool make mingw-w64-ucrt-x86_64-gcc gtk-doc help2man gengetopt gperf patch gettext-devel
+    GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
+    wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
+    tar xfa gnulib-mirror-$GNULIB_REVISION.tar.gz
+    rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
+    export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
+    ./bootstrap --skip-po --no-git
     ./configure --enable-gcc-warnings=error --disable-doc
     make -j$(nproc) V=1 -k check VERBOSE=t'
   - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
 
-tarball-repro-check:
+0-compare:
+  image: alpine:latest
   stage: repro
-  needs: [ B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Debian-testing, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404-release ]
+  needs: [ B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Debian-testing, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404-release, R-Trisquel10, R-Ubuntu2004 ]
   script:
-  - cd tar
-  - sha256sum */*.tar.* */src/*.tar.* | sort
-  - sha256sum */*.tar.* */src/*.tar.* | sort | uniq -c -w64 | sort -rn
-  - sha256sum */*.tar.* */src/*.tar.* | grep    -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
-  - sha256sum */*.tar.* */src/*.tar.* | grep -v -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
+  - cd out
+  - sha256sum */*.tar.* */*/*.tar.* | sort | grep    -- -src.tar.
+  - sha256sum */*.tar.* */*/*.tar.* | sort | grep -v -- -src.tar.
+  - sha256sum */*.tar.* */*/*.tar.* | sort | uniq -c -w64 | sort -rn
+  - sha256sum */*.tar.* */*/*.tar.* | grep    -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
+  - sha256sum */*.tar.* */*/*.tar.* | grep -v -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
   - cmp b-almalinux8/src/*.tar.gz b-almalinux9/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-debian-testing/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-debian12/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-rockylinux8/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-rockylinux9/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-ubuntu-rolling/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-ubuntu2404-arm64/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-ubuntu2404-release/src/*.tar.gz
+  - cmp b-debian11/src/*.tar.gz b-debian9/src/*.tar.gz
   - cmp b-debian11/src/*.tar.gz b-pureos10/src/*.tar.gz
-  - cmp b-debian11/src/*.tar.gz b-trisquel11/src/*.tar.gz
-  - cmp b-debian11/src/*.tar.gz b-ubuntu2204/src/*.tar.gz
   - cmp b-almalinux8/*.tar.gz b-rockylinux8/*.tar.gz
   - cmp b-almalinux9/*.tar.gz b-rockylinux9/*.tar.gz
   - cmp b-pureos10/*.tar.gz b-debian11/*.tar.gz
   - cmp b-trisquel11/*.tar.gz b-ubuntu2204/*.tar.gz
+  - cmp b-trisquel11/src/*.tar.gz b-ubuntu2204/src/*.tar.gz
+  - cmp b-ubuntu2404-arm64/*.tar.gz b-ubuntu2404-release/*.tar.gz
+  - cmp r-trisquel10/*.tar.gz r-ubuntu2004/*.tar.gz
+
+R-Trisquel10:
+  tags: [ saas-linux-medium-amd64 ]
+  image: docker.io/kpengboy/trisquel:10.0
+  stage: repro
+  needs: [Q-Debian-testing]
+  before_script:
+  - cat /etc/os-release
+  - time apt-get update -qq
+  - time apt-get install -y --no-install-recommends make git wget ca-certificates autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell datefudge patch | tee pkgs.log | tail
+  script:
+  - mkdir -pv ../b
+  - cd ../b
+  - tar xfz ../libidn/out/q-debian-testing/src/libidn-*.tar.gz
+  - cd $(tar tfa ../libidn/out/q-debian-testing/src/libidn-*.tar.gz | head -n1)
+  - rm -rv ../../libidn/out
+  - GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
+  - wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
+  - gzip -cd gnulib-mirror-$GNULIB_REVISION.tar.gz | tar xf -
+  - rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
+  - export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
+  - time datefudge "5 years" ./bootstrap --skip-po --no-git
+  - time datefudge "5 years" ./configure --enable-gcc-warnings=error
+  - grep '^HAVE_DOTNET = $' Makefile > /dev/null
+  - grep '^HAVE_MONO = 1$' Makefile > /dev/null
+  - time datefudge "5 years" make -j$(nproc) syntax-check exclude_file_name_regexp--sc_copyright_check='version-etc.c|doc/libidn.texi'
+  - time datefudge "5 years" make -j$(nproc) check V=1 VERBOSE=t
+  - time datefudge "5 years" make -j$(nproc) distcheck
+  - sha256sum *.tar.*
+  - mkdir -pv ../../libidn/out/$CI_JOB_NAME_SLUG/src ../../libidn/out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name '.tarball-version-git' -o -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} ../../libidn/out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* ../../libidn/out/$CI_JOB_NAME_SLUG/
+
+R-Ubuntu2004:
+  tags: [ saas-linux-medium-amd64 ]
+  image: ubuntu:20.04
+  stage: repro
+  needs: [Q-Debian-testing]
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+  before_script:
+  - cat /etc/os-release
+  - time apt-get update -qq
+  - time apt-get install -y --no-install-recommends make git wget ca-certificates autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell datefudge patch | tee pkgs.log | tail
+  script:
+  - tar xfz out/q-debian-testing/src/libidn-*.tar.gz
+  - cd $(tar tfa out/q-debian-testing/src/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
+  - GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
+  - wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
+  - gzip -cd gnulib-mirror-$GNULIB_REVISION.tar.gz | tar xf -
+  - rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
+  - export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
+  - time datefudge "5 years ago" ./bootstrap --skip-po --no-git
+  - time datefudge "5 years ago" ./configure --enable-gcc-warnings=error
+  - grep '^HAVE_DOTNET = $' Makefile > /dev/null
+  - grep '^HAVE_MONO = 1$' Makefile > /dev/null
+  - time datefudge "5 years ago" make -j$(nproc) syntax-check exclude_file_name_regexp--sc_copyright_check='version-etc.c|doc/libidn.texi'
+  - time datefudge "5 years ago" make -j$(nproc) check V=1 VERBOSE=t
+  - time datefudge "5 years ago" make -j$(nproc) distcheck
+  - sha256sum *.tar.*
+  - mkdir -pv ../out/$CI_JOB_NAME_SLUG/log
+  - find . -maxdepth 2 -name '.tarball-version-git' -o -name 'config.h' -o -name '*.log' -exec echo cp -v --parents {} ../out/$CI_JOB_NAME_SLUG/log \; | sh
+  - mv -v *.tar.* ../out/$CI_JOB_NAME_SLUG/
 
 AlmaLinux8:
   image: almalinux:8
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - dnf -y install make gcc diffutils valgrind
+  - time dnf -y install make gcc diffutils valgrind | tee pkgs.log | tail
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -510,8 +679,9 @@ AlmaLinux10:
   before_script:
   - dnf -y install make gcc diffutils valgrind gzip
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -522,8 +692,9 @@ AlmaLinux10-clang:
   before_script:
   - dnf -y install make clang diffutils valgrind gzip
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure CC=clang --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -535,8 +706,9 @@ AlmaLinux10-arm64:
   before_script:
   - dnf -y install make gcc diffutils valgrind gzip
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -549,10 +721,11 @@ AlmaLinux10-ppc64:
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - dnf -y install make gcc diffutils valgrind
+  - dnf -y install make gcc diffutils valgrind gzip
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -565,10 +738,11 @@ Alpine-mold:
   - apk update
   - apk add build-base mold
   variables:
-    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security"
+    WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral"
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error CC='cc -fuse-ld=mold'
   - make -j$(nproc) check V=1 VERBOSE=t 2>&1 | tee build.log
   - (! grep -E 'mold. warning' build.log)
@@ -582,8 +756,9 @@ ArchLinux:
   - cat /etc/os-release
   - pacman -Syu --noconfirm make gcc diffutils
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error
@@ -594,12 +769,13 @@ Armcross:
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - apt-get update -qq
-  - apt-get install -y -qq make gcc-arm-linux-gnueabi qemu-user qemu-user-binfmt file binfmt-support
+  - time apt-get update -qq
+  - time apt-get install -y -qq make gcc-arm-linux-gnueabi qemu-user qemu-user-binfmt file binfmt-support | tee pkgs.log | tail
   - update-binfmts --enable qemu-arm
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - mkdir b
   - cd b
   - ../configure --enable-gcc-warnings=error --host=arm-linux-gnueabi CFLAGS="-static --static"
@@ -616,8 +792,9 @@ OracleLinux7:
   - cat /etc/os-release
   - yum -y install make gcc diffutils valgrind
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -626,11 +803,12 @@ Debian3:
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - apt-get update
-  - apt-get install -y -qq make gcc libc-dev
+  - time apt-get update
+  - time apt-get install -y -qq make gcc libc-dev
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings
   - time make check V=1 VERBOSE=t
 
@@ -639,11 +817,12 @@ Debian3.1:
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - apt-get update
-  - apt-get install -y -qq make gcc libc-dev
+  - time apt-get update
+  - time apt-get install -y -qq make gcc libc-dev
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make check V=1 VERBOSE=t
 
@@ -652,11 +831,12 @@ Debian4:
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - apt-get update
-  - apt-get install -y -qq make gcc libc-dev
+  - time apt-get update
+  - time apt-get install -y -qq make gcc libc-dev
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make check V=1 VERBOSE=t
 
@@ -666,11 +846,12 @@ Debian10:
   needs: [B-Trisquel11]
   before_script:
   - cat /etc/os-release
-  - apt-get update
-  - apt-get install -y -qq make gcc
+  - time apt-get update
+  - time apt-get install -y -qq make gcc
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error
@@ -686,11 +867,15 @@ Debian12-ppc64:
   needs: [B-Trisquel11]
   before_script:
   - cat /etc/os-release
-  - dnf -y install make gcc valgrind
+  - time apt-get update
+  - time apt-get install -y -qq make gcc
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
-  - time ./configure --enable-gcc-warnings=error
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
+  - mkdir b
+  - cd b
+  - time ../configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Fedora-latest:
@@ -701,8 +886,30 @@ Fedora-latest:
   - cat /etc/os-release
   - dnf -y install make gcc diffutils valgrind
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
+Guix:
+  image: registry.gitlab.com/debdistutils/guix/container:latest
+  stage: test
+  needs: [B-Trisquel11]
+  before_script:
+  - cp -rL /gnu/store/*profile/etc/* /etc/
+  - echo 'root:x:0:0:root:/:/bin/sh' >> /etc/passwd
+  - groupadd --system guixbuild
+  - for i in $(seq -w 1 10); do useradd -g guixbuild -G guixbuild -d /var/empty -s $(command -v nologin) -c "Guix build user $i" --system guixbuilder$i; done
+  - export HOME=/
+  - env LANG=C.UTF-8 guix-daemon --build-users-group=guixbuild &
+  - guix archive --authorize < /share/guix/ci.guix.gnu.org.pub
+  - guix archive --authorize < /share/guix/bordeaux.guix.gnu.org.pub
+  - guix describe
+  script:
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -712,14 +919,15 @@ Mingw32:
   needs: [B-Trisquel11]
   before_script:
   - dpkg --add-architecture i386
-  - apt-get update -qq
-  - apt-get install -y -qq make mingw-w64 wine wine32 libwine libwine:i386 binfmt-support wine-binfmt
+  - time apt-get update -qq
+  - time apt-get install -y -qq make mingw-w64 wine wine32 libwine libwine:i386 binfmt-support wine-binfmt
   - update-binfmts --enable wine
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error --host=i686-w64-mingw32 CC='i686-w64-mingw32-gcc -static-libgcc'
@@ -730,14 +938,15 @@ Mingw64:
   stage: test
   needs: [B-Trisquel11]
   before_script:
-  - apt-get update -qq
-  - apt-get install -y -qq make mingw-w64 wine wine64 binfmt-support wine-binfmt
+  - time apt-get update -qq
+  - time apt-get install -y -qq make mingw-w64 wine wine64 binfmt-support wine-binfmt
   - update-binfmts --enable wine
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script:
-  - tar xfz tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error --host=x86_64-w64-mingw32
@@ -755,8 +964,9 @@ RockyLinux9-ppc64:
   - cat /etc/os-release
   - dnf -y install make gcc valgrind
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -767,11 +977,12 @@ Ubuntu12.04:
   before_script:
   - cat /etc/os-release
   - perl -pi -e 's/archive.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
-  - apt-get update -q
-  - apt-get install -y -qq make gcc valgrind
+  - time apt-get update -q
+  - time apt-get install -y -qq make gcc valgrind
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -781,11 +992,14 @@ Ubuntu14.04:
   needs: [B-Trisquel11]
   before_script:
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -y -qq make gcc valgrind
+  - time apt-get update -qq
+  - time apt-get install -y -qq make gcc valgrind
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - mkdir -pv ../p
+  - cd ../p
+  - tar xfa ../libidn/out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa ../libidn/out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../../libidn/out
   - time ./configure --disable-tld --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -795,11 +1009,12 @@ Ubuntu-rolling:
   needs: [B-Trisquel11]
   before_script:
   - cat /etc/os-release
-  - apt-get update -qq
-  - apt-get install -y -qq git make gcc valgrind gtk-doc-tools texinfo texlive texlive-plain-generic
+  - time apt-get update -qq
+  - time apt-get install -y -qq git make gcc valgrind gtk-doc-tools texinfo texlive texlive-plain-generic
   script:
-  - tar xfa tar/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-trisquel11/libidn-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - rm -rv ../out
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - make -j$(nproc) distcheck
@@ -825,11 +1040,12 @@ Windows-MSYS:
   - |
     C:\msys64\usr\bin\bash -lcx '
     pacman --noconfirm -Syu make gcc
-    tar xfa tar/b-trisquel11/libidn-*.tar.gz
-    cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+    tar xfa out/b-trisquel11/libidn-*.tar.gz
+    cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+    rm -rv ../out
     ./configure --enable-gcc-warnings=error --disable-doc
     make -j$(nproc) V=1 -k check VERBOSE=t'
-  - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
+  - C:\msys64\usr\bin\bash -lc 'grep ^PASS libidn-*/tests/tst_idna.log'
 
 Windows-MINGW64:
   rules:
@@ -852,11 +1068,12 @@ Windows-MINGW64:
   - |
     C:\msys64\usr\bin\bash -lcx '
     pacman --noconfirm -Syu make mingw-w64-x86_64-gcc
-    tar xfa tar/b-trisquel11/libidn-*.tar.gz
-    cd $(tar tfa tar/b-trisquel11/libidn-*.tar.gz | head -n1)
+    tar xfa out/b-trisquel11/libidn-*.tar.gz
+    cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+    rm -rv ../out
     ./configure --enable-gcc-warnings=error --disable-doc
     make -j$(nproc) V=1 -k check VERBOSE=t'
-  - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
+  - C:\msys64\usr\bin\bash -lc 'grep ^PASS libidn-*/tests/tst_idna.log'
 
 macOS13Xcode14:
   rules:
@@ -869,8 +1086,9 @@ macOS13Xcode14:
   variables:
     WERROR_CFLAGS: "-Wno-error=format-nonliteral -Wno-error=format-security"
   script:
-  - gzip -cd tar/b-trisquel11/libidn-*.tar.gz | tar xf -
-  - cd $(gzip -cd tar/b-trisquel11/libidn-*.tar.gz | tar tf - | head -n1)
+  - gzip -cd out/b-trisquel11/libidn-*.tar.gz | tar xf -
+  - cd $(gzip -cd out/b-trisquel11/libidn-*.tar.gz | tar tf - | head -n1)
+  - rm -rv ../out
   - mkdir b
   - cd b
   - ../configure --enable-gcc-warnings=error
@@ -881,10 +1099,11 @@ macOS13Xcode14:
   image: debian:testing-slim
   stage: build
   before_script:
-  - apt-get update -qq
-  - apt-get install -y -q make git autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
+  - time apt-get update -qq
+  - time apt-get install -y -q make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell | tee pkgs.log | tail
   script:
-  - time ./bootstrap --skip-po
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-gcc-warnings=error --enable-java --enable-gtk-doc --enable-gtk-doc-pdf
   - time make V=1
   - mkdir -p public
