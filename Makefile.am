@@ -79,16 +79,17 @@ mtime-NEWS-to-git-HEAD:
 		touch -m -d @"$$($(GIT_NEWS_MTIME_CMD))" $(srcdir)/NEWS; \
 	fi
 
-dist-hook: pot-CreationDate-to-mtime-NEWS
-.PHONY: pot-CreationDate-to-mtime-NEWS
-pot-CreationDate-to-mtime-NEWS: mtime-NEWS-to-git-HEAD
-	$(AM_V_GEN)$(SED) -e 's,POT-Creation-Date: .*\\n",POT-Creation-Date: '"$$(env LC_ALL=C stat --format=%y $(srcdir)/NEWS | cut -c1-16,31-)"'\\n",' < $(distdir)/po/$(PACKAGE).pot > $@.tmp
-	$(AM_V_at)if cmp $@.tmp $(distdir)/po/$(PACKAGE).pot; then \
-		rm -f $@.tmp; else mv $@.tmp $(distdir)/po/$(PACKAGE).pot; fi
-	-$(AM_V_at)cmp $(srcdir)/po/$(PACKAGE).pot \
-			$(distdir)/po/$(PACKAGE).pot || \
-		cp $(distdir)/po/$(PACKAGE).pot \
-			$(srcdir)/po/$(PACKAGE).pot
+dist-hook: po-CreationDate-to-mtime-NEWS
+.PHONY: po-CreationDate-to-mtime-NEWS
+po-CreationDate-to-mtime-NEWS: mtime-NEWS-to-git-HEAD
+	$(AM_V_GEN)for p in $(distdir)/po/*.po $(distdir)/po/$(PACKAGE).pot; do \
+		$(SED) -e 's,POT-Creation-Date: .*\\n",POT-Creation-Date: '"$$(env LC_ALL=C TZ=UTC0 stat --format=%y $(srcdir)/NEWS | cut -c1-16,31-)"'\\n",' < $$p > $$p.tmp && \
+		if cmp $$p $$p.tmp > /dev/null; then \
+			rm -f $@.tmp; \
+		else \
+			mv $$p.tmp $$p; \
+		fi \
+	done
 
 dist-hook: srcdist
 .PHONY: srcdist
