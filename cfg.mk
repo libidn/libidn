@@ -40,6 +40,8 @@ exclude_file_name_regexp--sc_prohibit_always_true_header_tests = ^lib/toutf8.c$$
 exclude_file_name_regexp--sc_indent = '^lib/\(gunibreak\|gunicomp\|gunidecomp\).h$$'
 exclude_file_name_regexp--sc_fsf_postal = ^(COPYINGv2|COPYING.LESSERv2)$$
 
+announce_gen_args = --cksum-checksums
+
 TAR_OPTIONS += --mode=go+u,go-w --mtime=$(abs_top_srcdir)/NEWS --format=posix
 
 aximport:
