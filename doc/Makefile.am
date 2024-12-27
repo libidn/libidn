@@ -34,15 +34,15 @@ imagesdir = $(infodir)
 images_DATA = libidn-components.png
 
 libidn-components.eps: components.fig
-	$(AM_V_GEN)fig2dev -L eps $(srcdir)/components.fig | $(GREP) -v '^%%CreationDate:' > $@.tmp
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L eps -n $@ $(srcdir)/components.fig | $(GREP) -v '^%%Creator:' > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 libidn-components.png: components.fig
-	$(AM_V_GEN)fig2dev -L png $(srcdir)/components.fig > $@.tmp
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L png $(srcdir)/components.fig > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 libidn-components.pdf: components.fig
-	$(AM_V_GEN)fig2dev -L pdf $(srcdir)/components.fig | $(GREP) -v -e '^CreationDate: ' -e '^ModDate: ' > $@.tmp
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L pdf $(srcdir)/components.fig | $(GREP) -v -e '^CreationDate: ' -e '^ModDate: ' > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 idn-help.texi: $(top_srcdir)/src/idn.c
@@ -79,7 +79,7 @@ MAINTAINERCLEANFILES = $(dist_man_MANS)
 idn.1: $(top_srcdir)/src/idn.c $(top_srcdir)/src/idn.ggo $(top_srcdir)/.version
 	$(MAKE) -C ../lib
 	$(MAKE) -C ../src
-	$(AM_V_GEN)$(HELP2MAN) \
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 $(HELP2MAN) \
 		--name="Internationalized Domain Names command line tool" \
 		--output=$@ $(top_builddir)/src/idn$(EXEEXT)
 

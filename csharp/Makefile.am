@@ -72,9 +72,11 @@ GenerateTables.exe: $(SOURCES_GENERATE)
 		|| cp $(SPEC)/CompositionExclusions-3.2.0.txt CompositionExclusions.txt || true; \
 	fi
 
-RFC3454.cs CombiningClass.cs DecompositionKeys.cs DecompositionMappings.cs Composition.cs: $(GEN_SOURCES)
-	make GenerateTables.exe
-	$(CSHARPEXEC) ./GenerateTables.exe
+GEN_OUTPUTS = RFC3454.cs CombiningClass.cs DecompositionKeys.cs DecompositionMappings.cs Composition.cs
+$(GEN_OUTPUTS): $(GEN_SOURCES)
+	$(AM_V_GEN)make GenerateTables.exe
+	$(AM_V_GEN)$(CSHARPEXEC) ./GenerateTables.exe
+	$(AM_V_GEN)if test "$(srcdir)" != "$(builddir)"; then cp -v $(GEN_OUTPUTS) $(srcdir); fi
 
 install-dll-dir:
 	$(mkinstalldirs) $(DESTDIR)$(libdir)

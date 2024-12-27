@@ -62,19 +62,21 @@ dist-hook: gen-ChangeLog
 
 .PHONY: gen-ChangeLog
 gen-ChangeLog:
-	$(AM_V_GEN)if test -e .git; then			\
+	$(AM_V_GEN)if test -e $(srcdir)/.git; then		\
 	  LC_ALL=en_US.UTF-8 TZ=UTC0				\
 	    $(top_srcdir)/build-aux/gitlog-to-changelog		\
+		--srcdir=$(srcdir)				\
 	      > $(distdir)/ChangeLog.tmp &&			\
 	  mv -f $(distdir)/ChangeLog.tmp $(distdir)/ChangeLog;	\
 	fi
 
+GIT_NEWS_MTIME_CMD = git -C $(srcdir) log -1 --format=%ct
 dist-hook: mtime-NEWS-to-git-HEAD
 .PHONY: mtime-NEWS-to-git-HEAD
 mtime-NEWS-to-git-HEAD:
 	$(AM_V_GEN)if test -e $(srcdir)/.git \
 			&& command -v git > /dev/null; then \
-		touch -m -d @"$$(git log -1 --format=%ct)" $(srcdir)/NEWS; \
+		touch -m -d @"$$($(GIT_NEWS_MTIME_CMD))" $(srcdir)/NEWS; \
 	fi
 
 dist-hook: pot-CreationDate-to-mtime-NEWS
