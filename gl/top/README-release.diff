@@ -53,7 +53,24 @@
  
  * To (i) set the date, version number, and release TYPE on line 3 of
    NEWS, (ii) commit that, and (iii) tag the release, run
-@@ -49,9 +61,12 @@
+@@ -38,20 +50,28 @@
+     # "TYPE" must be stable, beta or alpha
+     make release-commit RELEASE='X.Y TYPE'
+ 
++* Push the tag to allow the GitLab pipeline to build reproducible
++  source tarballs.
++
++    git push origin tag $(git describe)
++
+ * Run the following to create release tarballs.  Your choice selects the
+   corresponding upload-to destination in the emitted gnupload command.
+   The different destinations are specified in cfg.mk.  See the definitions
+   of gnu_ftp_host-{alpha,beta,stable}.
+ 
+-    make release RELEASE='X.Y TYPE'
++    env TZ=UTC0 make release RELEASE='X.Y TYPE'
+ 
+ * Test the tarball.  Copy it to a few odd-ball systems and ensure that
    it builds and passes all tests.
  
  * While that's happening, write the release announcement that you will
@@ -67,7 +84,7 @@
  Once all the builds and tests have passed,
  
  * Run the gnupload command that was suggested by your "make release"
-@@ -68,28 +83,6 @@
+@@ -68,28 +88,6 @@
      v=$(cat .prev-version)
      git push origin master tag v$v
  
@@ -96,7 +113,7 @@
  * Send the announcement email message.
  
  * After each non-alpha release, run
-@@ -98,4 +91,4 @@
+@@ -98,4 +96,4 @@
  
    to update the on-line manual accessible at
  
