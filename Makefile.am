@@ -62,12 +62,15 @@ dist-hook: gen-ChangeLog
 
 .PHONY: gen-ChangeLog
 gen-ChangeLog:
-	$(AM_V_GEN)if test -e $(srcdir)/.git; then		\
-	  LC_ALL=en_US.UTF-8 TZ=UTC0				\
-	    $(top_srcdir)/build-aux/gitlog-to-changelog		\
-		--srcdir=$(srcdir)				\
-	      > $(distdir)/ChangeLog.tmp &&			\
-	  mv -f $(distdir)/ChangeLog.tmp $(distdir)/ChangeLog;	\
+	$(AM_V_GEN)if test -e $(srcdir)/.git; then			\
+	  LC_ALL=en_US.UTF-8 TZ=UTC0					\
+	    $(top_srcdir)/build-aux/gitlog-to-changelog			\
+	      --srcdir=$(srcdir) --					\
+	      v$(PREV_VERSION)~.. > $(distdir)/cl-t &&			\
+	    { printf '\n\nSee the source repo for older entries\n'	\
+	      >> $(distdir)/cl-t &&					\
+	      rm -f $(distdir)/ChangeLog &&				\
+	      mv $(distdir)/cl-t $(distdir)/ChangeLog; }		\
 	fi
 
 GIT_NEWS_MTIME_CMD = git -C $(srcdir) log -1 --format=%ct
