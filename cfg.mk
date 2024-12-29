@@ -19,7 +19,7 @@ manual_title = Internationalized Domain Names Library
 
 old_NEWS_hash = 08790cbc825916c81904d5fc00b0dd92
 
-bootstrap-tools = gnulib,autoconf,automake,libtoolize,make,makeinfo,help2man,gperf,gengetopt,gtkdocize,tar,gzip
+bootstrap-tools = git,gnulib,autoconf,automake,libtoolize,make,makeinfo,help2man,gperf,gengetopt,gtkdocize,tar,gzip
 
 local-checks-to-skip = sc_GPL_version sc_prohibit_strcmp
 local-checks-to-skip += sc_prohibit_gnu_make_extensions
