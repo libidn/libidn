@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# Copyright (C) 2002-2024 Simon Josefsson.
+# Copyright (C) 2002-2025 Simon Josefsson.
 #
 # This file is part of GNU Libidn.
 #
@@ -230,7 +230,7 @@ stamp-gdoc: $(top_srcdir)/.version $(GDOC_SRC)
 			-includefuncprefix \
 			-seeinfo $(PACKAGE) \
 			-verbatimcopying \
-			-copyright "2002-2024 Simon Josefsson" \
+			-copyright "2002-2025 Simon Josefsson" \
 			-function $$i \
 			$(GDOC_SRC) > man/$$i.3 && \
 		$(srcdir)/gdoc -texinfo -function $$i \

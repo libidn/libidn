@@ -1,5 +1,5 @@
 /* tst_idna2.c --- Self tests for idna_to_ascii_8z().
- * Copyright (C) 2002-2024 Simon Josefsson
+ * Copyright (C) 2002-2025 Simon Josefsson
  *
  * This file is part of GNU Libidn.
  *

@@ -105,7 +105,7 @@ See README-release on how to make a release.
 Happy hacking!
 
 ----------------------------------------------------------------------
-Copyright (C) 2009-2024 Simon Josefsson
+Copyright (C) 2009-2025 Simon Josefsson
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright
 notice and this notice are preserved.
