@@ -17,10 +17,11 @@ use of the libidn library today is to support the historic IDNA2003
 behaviour or to use Stringprep profiles.  Please try to migrate to
 libidn2 wherever possible.
 
-If you obtained this file as part of a "git clone", then see the
-CONTRIBUTING.md file.  If this file came to you as part of a tar
-archive, then see the file INSTALL for compilation and installation
-instructions.
+If this file came to you as part of a tar archive, then see the file
+(INSTALL)[INSTALL] for generic compilation and installation
+instructions.  Before building you should consider installing the
+[dependencies](DEPENDENCIES.md).  If you obtained this file as part of
+a "git clone", then see the CONTRIBUTING.md file.
 
 If you need help to use Libidn, or wish to help others, you are
 invited to join our mailing list help-libidn@gnu.org, see

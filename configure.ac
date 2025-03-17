@@ -38,7 +38,7 @@ AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([lib/m4])
 AC_CONFIG_HEADERS([config.h])
 
-AM_INIT_AUTOMAKE([-Wall])
+AM_INIT_AUTOMAKE([-Wall tar-ustar])
 AM_SILENT_RULES([yes])
 
 AC_PROG_CC
@@ -80,6 +80,10 @@ m4_ifdef([GTK_DOC_CHECK], [
 GTK_DOC_CHECK([1.14],[--flavour no-tmpl])
 ],[
 AM_CONDITIONAL([ENABLE_GTK_DOC], false)
+])
+# needed for some older versions of gtk-doc
+m4_ifdef([GTK_DOC_USE_LIBTOOL], [], [
+AM_CONDITIONAL([GTK_DOC_USE_LIBTOOL], false)
 ])
 
 # Check for java
@@ -196,7 +200,6 @@ AC_ARG_ENABLE(doc,
     enable_doc=$enableval, enable_doc=yes)
 AM_CONDITIONAL(ENABLE_DOC, test "$enable_doc" != "no")
 
-
 AC_CONFIG_FILES([
   Makefile
   contrib/doxygen/Doxyfile
@@ -230,6 +233,7 @@ AC_CONFIG_FILES([
   src/Makefile
   tests/Makefile
 ])
+gl_CONFIG_VERSION_STAMP
 AC_OUTPUT
 
 AC_MSG_NOTICE([summary of main build options:

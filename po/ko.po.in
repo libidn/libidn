@@ -1,0 +1,334 @@
+# Korean translation of the libidn package.
+# Copyright (C) 2022 Free Software Foundation, Inc.
+# This file is distributed under the same license as the libidn package.
+# Seong-ho Cho <darkcircle.0426@gmail.com>, 2022.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: libidn 1.40\n"
+"Report-Msgid-Bugs-To: bug-libidn@gnu.org\n"
+"POT-Creation-Date: 2022-06-20 22:26+0200\n"
+"PO-Revision-Date: 2022-10-28 15:19+0900\n"
+"Last-Translator: Seong-ho Cho <darkcircle.0426@gmail.com>\n"
+"Language-Team: Korean <translation-team-ko@googlegroups.com>\n"
+"Language: ko\n"
+"X-Bugs: Report translation errors to the Language-Team address.\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.2\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+
+#: lib/strerror-idna.c:82 lib/strerror-pr29.c:66 lib/strerror-punycode.c:66
+#: lib/strerror-stringprep.c:87 lib/strerror-tld.c:68
+msgid "Success"
+msgstr "성공"
+
+#: lib/strerror-idna.c:86 lib/strerror-pr29.c:74
+msgid "String preparation failed"
+msgstr "문자열 준비 실패"
+
+#: lib/strerror-idna.c:90
+msgid "Punycode failed"
+msgstr "퓨니코딩 실패"
+
+#: lib/strerror-idna.c:94
+msgid "Non-digit/letter/hyphen in input"
+msgstr "입력에 숫자/문자/하이픈이 아닌 문자가 있습니다"
+
+#: lib/strerror-idna.c:98
+msgid "Forbidden leading or trailing minus sign ('-')"
+msgstr "음수 부호('-')가 앞에 붙거나 뒤에 붙으면 안됩니다"
+
+#: lib/strerror-idna.c:102
+msgid "Output would be too large or too small"
+msgstr "출력이 너무 크거나 작습니다"
+
+#: lib/strerror-idna.c:106
+msgid "Input does not start with ACE prefix ('xn--')"
+msgstr "입력이 ACE 접두사('xn--')로 시작하지 않았습니다"
+
+#: lib/strerror-idna.c:110
+msgid "String not idempotent under ToASCII"
+msgstr "문자열에 ToASCII 멱등성이 없습니다"
+
+#: lib/strerror-idna.c:114
+msgid "Input already contain ACE prefix ('xn--')"
+msgstr "입력에 이미 ACE 접두사('xn--')가 있습니다"
+
+#: lib/strerror-idna.c:118 lib/strerror-stringprep.c:127 lib/strerror-tld.c:84
+msgid "Character encoding conversion error"
+msgstr "문자 인코딩 변환 오류"
+
+#: lib/strerror-idna.c:122 lib/strerror-stringprep.c:135 lib/strerror-tld.c:80
+msgid "Cannot allocate memory"
+msgstr "메모리를 할당할 수 없습니다"
+
+#: lib/strerror-idna.c:126
+msgid "System dlopen failed"
+msgstr "시스템 dlopen 실패"
+
+#: lib/strerror-idna.c:130 lib/strerror-pr29.c:78 lib/strerror-punycode.c:82
+#: lib/strerror-stringprep.c:139 lib/strerror-tld.c:92
+msgid "Unknown error"
+msgstr "알 수 없는 오류"
+
+#: lib/strerror-pr29.c:70
+msgid "String not idempotent under Unicode NFKC normalization"
+msgstr "문자열에 유니코드 NFKC 정규화 멱등성이 없습니다"
+
+#: lib/strerror-punycode.c:70
+msgid "Invalid input"
+msgstr "부적절한 입력"
+
+#: lib/strerror-punycode.c:74 lib/strerror-stringprep.c:111
+msgid "Output would exceed the buffer space provided"
+msgstr "출력이 제공한 버퍼 크기를 넘었습니다"
+
+#: lib/strerror-punycode.c:78
+msgid "String size limit exceeded"
+msgstr "문자열 길이 제한 초과"
+
+#: lib/strerror-stringprep.c:91
+msgid "Forbidden unassigned code points in input"
+msgstr "입력에 금지된 비할당 코드 포인트"
+
+#: lib/strerror-stringprep.c:95
+msgid "Prohibited code points in input"
+msgstr "입력에 금지된 코드 포인트"
+
+#: lib/strerror-stringprep.c:99
+msgid "Conflicting bidirectional properties in input"
+msgstr "입력에 중복 양방향 속성"
+
+#: lib/strerror-stringprep.c:103
+msgid "Malformed bidirectional string"
+msgstr "기형 양방향 문자열"
+
+#: lib/strerror-stringprep.c:107
+msgid "Prohibited bidirectional code points in input"
+msgstr "입력에 금지된 양방향 코드 포인트"
+
+#: lib/strerror-stringprep.c:115
+msgid "Error in stringprep profile definition"
+msgstr "stringprep 프로파일 정의에 오류가 있습니다"
+
+#: lib/strerror-stringprep.c:119
+msgid "Flag conflict with profile"
+msgstr "플래그가 프로파일과 중복됩니다"
+
+#: lib/strerror-stringprep.c:123
+msgid "Unknown profile"
+msgstr "알 수 없는 프로파일"
+
+#: lib/strerror-stringprep.c:131
+msgid "Unicode normalization failed (internal error)"
+msgstr "유니코드 정규화 실패(내부 오류)"
+
+#: lib/strerror-tld.c:72
+msgid "Code points prohibited by top-level domain"
+msgstr "최상위 도메인에서 금지한 코드 포인트"
+
+#: lib/strerror-tld.c:76
+msgid "Missing input"
+msgstr "입력 빠짐"
+
+#: lib/strerror-tld.c:88
+msgid "No top-level domain found in input"
+msgstr "입력에 최상위 도메인이 없습니다"
+
+#: src/idn.c:65
+#, c-format
+msgid "Try '%s --help' for more information.\n"
+msgstr "자세한 내용은 '%s --help'를 입력하십시오.\n"
+
+#: src/idn.c:69
+#, c-format
+msgid "Usage: %s [OPTION]... [STRINGS]...\n"
+msgstr "사용법: %s [<옵션>]... [<문자열>]...\n"
+
+#: src/idn.c:72
+msgid ""
+"Internationalized Domain Name (IDN) convert STRINGS, or standard input.\n"
+"\n"
+msgstr ""
+"국제화 도메인 이름(IDN)에서 <문자열> 또는 표준 입력을 변환합니다.\n"
+"\n"
+
+#: src/idn.c:76
+msgid ""
+"Command line interface to the internationalized domain name library.\n"
+"\n"
+"All strings are expected to be encoded in the preferred charset used\n"
+"by your locale.  Use --debug to find out what this charset is.  You\n"
+"can override the charset used by setting environment variable CHARSET.\n"
+"\n"
+"To process a string that starts with '-', for example '-foo', use '--'\n"
+"to signal the end of parameters, as in: idn --quiet -a -- -foo\n"
+"\n"
+"Mandatory arguments to long options are mandatory for short options too.\n"
+msgstr ""
+"국제화 도메인 이름 라이브러리의 명령행 인터페이스입니다.\n"
+"\n"
+"가능한 모든 문자열을 로캘에서 사용하는 적절한 문자세트로 인코딩합\n"
+"니다. 어떤 문자세트인지 확인하려면 --debug 옵션을 사용하십시오.\n"
+"환경 변수 CHARSET 을 설정하여 문자세트를 대리 지정할 수 있습니다.\n"
+"\n"
+"예를 들어, '-foo' 처럼 '-' 문자로 시작하는 문자열을 처리하려면\n"
+"idn --quiet -a -- -foo 명령처럼 매개변수 마지막 부분에 '--' 옵션을\n"
+"사용하십시오\n"
+"\n"
+"긴 옵션의 필수 인자는 짧은 옵션에서도 마찬가지로 필수 인자입니다.\n"
+"\n"
+
+#: src/idn.c:88
+msgid ""
+"  -h, --help               Print help and exit\n"
+"  -V, --version            Print version and exit\n"
+msgstr ""
+"  -h, --help               도움말을 출력하고 나갑니다\n"
+"  -V, --version            버전을 출력하고 나갑니다\n"
+
+#: src/idn.c:92
+msgid ""
+"  -s, --stringprep         Prepare string according to nameprep profile\n"
+"  -d, --punycode-decode    Decode Punycode\n"
+"  -e, --punycode-encode    Encode Punycode\n"
+"  -a, --idna-to-ascii      Convert to ACE according to IDNA (default mode)\n"
+"  -u, --idna-to-unicode    Convert from ACE according to IDNA\n"
+msgstr ""
+"  -s, --stringprep         nameprep 프로파일에 따라 문자열을 준비합니다\n"
+"  -d, --punycode-decode    퓨니코드를 디코딩합니다\n"
+"  -e, --punycode-encode    퓨니코드를 인코딩합니다\n"
+"  -a, --idna-to-ascii      IDNA에 따라 ACE로 변환합니다 (기본 모드)\n"
+"  -u, --idna-to-unicode    IDNA에 따라 ACE를 변환합니다\n"
+
+#: src/idn.c:99
+msgid ""
+"      --allow-unassigned   Toggle IDNA AllowUnassigned flag (default off)\n"
+"      --usestd3asciirules  Toggle IDNA UseSTD3ASCIIRules flag (default off)\n"
+msgstr ""
+"      --allow-unassigned   IDNA AllowUnassigned 플래그를 전환합니다 (기본값: 끔)\n"
+"      --usestd3asciirules  IDNA UseSTD3ASCIIRules 플래그를 전환합니다 (기본값: 끔)\n"
+
+#: src/idn.c:103
+msgid ""
+"      --no-tld             Don't check string for TLD specific rules\n"
+"                             Only for --idna-to-ascii and --idna-to-unicode\n"
+msgstr ""
+"      --no-tld             TLD 지정 규칙으로 문자열을 검사하지 않습니다\n"
+"                             --idna-to-ascii 및 --idna-to-unicode 옵션에만 해당\n"
+
+#: src/idn.c:107
+msgid "  -n, --nfkc               Normalize string according to Unicode v3.2 NFKC\n"
+msgstr "  -n, --nfkc               유니코드 v3.2 NFKC에 따라 문자열을 정규화합니다\n"
+
+#: src/idn.c:110
+msgid ""
+"  -p, --profile=STRING     Use specified stringprep profile instead\n"
+"                             Valid stringprep profiles: Nameprep\n"
+"                             iSCSI Nodeprep Resourceprep trace SASLprep\n"
+msgstr ""
+"  -p, --profile=<문자열>   stringprep 지정 프로파일을 대신 활용합니다\n"
+"                             적절한 stringprep 프로파일: Nameprep\n"
+"                             iSCSI Nodeprep Resourceprep trace SASLprep\n"
+
+#: src/idn.c:115
+msgid ""
+"      --debug              Print debugging information\n"
+"      --quiet              Silent operation\n"
+msgstr ""
+"      --debug              디버깅 정보를 출력합니다\n"
+"      --quiet              조용히 처리합니다\n"
+
+#: src/idn.c:173
+#, c-format
+msgid "only one of -s, -e, -d, -a, -u or -n can be specified"
+msgstr "-s, -e, -d, -a, -u, -n 옵션 중 하나만 지정할 수 있습니다"
+
+#: src/idn.c:182
+#, c-format
+msgid "Charset: %s\n"
+msgstr "문자세트: %s\n"
+
+#: src/idn.c:186
+#, c-format
+msgid "Type each input string on a line by itself, terminated by a newline character.\n"
+msgstr "행 별로 문자열을 입력한 후, 개행 문자로 끝냅니다.\n"
+
+#: src/idn.c:198
+#, c-format
+msgid "input error"
+msgstr "입력 오류"
+
+#: src/idn.c:209 src/idn.c:272 src/idn.c:355 src/idn.c:432 src/idn.c:513
+#, c-format
+msgid "could not convert from %s to UTF-8"
+msgstr "%s에서 UTF-8로 변환할 수 없습니다"
+
+#: src/idn.c:217 src/idn.c:242 src/idn.c:279 src/idn.c:496 src/idn.c:525
+#: src/idn.c:549
+#, c-format
+msgid "could not convert from UTF-8 to UCS-4"
+msgstr "UTF-8에서 UCS-4로 변환할 수 없습니다"
+
+#: src/idn.c:234
+#, c-format
+msgid "stringprep_profile: %s"
+msgstr "stringprep_profile: %s"
+
+#: src/idn.c:257 src/idn.c:300 src/idn.c:343 src/idn.c:501 src/idn.c:562
+#, c-format
+msgid "could not convert from UTF-8 to %s"
+msgstr "UTF-8에서 %s(으)로 변환할 수 없습니다"
+
+#: src/idn.c:293
+#, c-format
+msgid "punycode_encode: %s"
+msgstr "punycode_encode: %s"
+
+#: src/idn.c:315
+#, c-format
+msgid "malloc"
+msgstr "malloc"
+
+#: src/idn.c:321
+#, c-format
+msgid "punycode_decode: %s"
+msgstr "punycode_decode: %s"
+
+#: src/idn.c:338 src/idn.c:362 src/idn.c:440
+#, c-format
+msgid "could not convert from UCS-4 to UTF-8"
+msgstr "UCS-4에서 UTF-8로 변환할 수 없습니다"
+
+#: src/idn.c:379
+#, c-format
+msgid "idna_to_ascii_4z: %s"
+msgstr "idna_to_ascii_4z: %s"
+
+#: src/idn.c:393
+#, c-format
+msgid "idna_to_unicode_8z4z (TLD): %s"
+msgstr "idna_to_unicode_8z4z (TLD): %s"
+
+#: src/idn.c:407 src/idn.c:480
+#, c-format
+msgid "tld_check_4z (position %lu): %s"
+msgstr "tld_check_4z (위치 %lu번): %s"
+
+#: src/idn.c:410 src/idn.c:486
+#, c-format
+msgid "tld_check_4z: %s"
+msgstr "tld_check_4z: %s"
+
+#: src/idn.c:459
+#, c-format
+msgid "idna_to_unicode_8z4z: %s"
+msgstr "idna_to_unicode_8z4z: %s"
+
+#: src/idn.c:538
+#, c-format
+msgid "could not do NFKC normalization"
+msgstr "NFKC 정규화를 수행할 수 없습니다"

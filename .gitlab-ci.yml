@@ -20,12 +20,12 @@ variables:
   GNULIB_URL: https://gitlab.com/libidn/gnulib-mirror.git
 
 stages:
-- quick
-- build
-- repro
-- test
+ - build # B-* jobs build from git for "make dist"
+ - repro # R-* jobs do "make release" from git, S-* jobs build from *-src.tar.gz
+ - test # tarball test builds
 
 default:
+  interruptible: true
   artifacts:
     expire_in: 2 weeks
     when: always
@@ -35,16 +35,26 @@ default:
 
 .gnulib-fetch:
   script:
-  - GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
+  - GNULIB_REVISION=$(. bootstrap.conf >&2; echo $GNULIB_REVISION)
   - wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
   - gzip -cd gnulib-mirror-$GNULIB_REVISION.tar.gz | tar xf -
   - rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
   - export GNULIB_SRCDIR=$PWD/gnulib-mirror-$GNULIB_REVISION
 
+.save-artifacts:
+  script:
+  - (! command -v git > /dev/null) || git status
+  - (! command -v git > /dev/null) || git diff --exit-code # nothing should change version controlled files
+  - sha256sum *.tar.*
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,log}
+  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
+  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/ || true
+  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+
 Q-Debian-testing:
   tags: [ saas-linux-medium-amd64 ]
   image: debian:testing-slim
-  stage: quick
+  stage: build
   before_script:
   - cat /etc/os-release
   - grep '????-??-??' NEWS > /dev/null || (test -z "$CI_COMMIT_BRANCH" && test -n "$CI_COMMIT_TAG")
@@ -71,12 +81,11 @@ Q-Debian-testing:
   - sha256sum *.tar.*
   - mkdir -pv ../out/$CI_JOB_NAME_SLUG/{src,log}
   - find config.h *.log tests/*.log -exec mv -v {} ../out/$CI_JOB_NAME_SLUG/log/ \;
-  - find ../out/$CI_JOB_NAME_SLUG/log/*.log -exec mv {} {}.txt \;
   - mv -v *-src.tar.* ../out/$CI_JOB_NAME_SLUG/src/
 
 # https://docs.gitlab.com/ee/user/application_security/sast/
 sast:
-  stage: quick
+  stage: build
   variables:
     SAST_EXCLUDED_PATHS: gnulib
 include:
@@ -121,8 +130,8 @@ Coverity:
   before_script:
   - cat /etc/os-release
   - time dnf install -y epel-release
-  - time dnf --enablerepo=$(dnf repolist --all | grep crb > /dev/null && echo crb || echo powertools) install -y ${PKGS} | tee pkgs.log | tail
-  - gcc --version
+  - time dnf --enablerepo=$(dnf repolist --all | grep crb > /dev/null && echo crb || echo powertools) install -y ${PKGS}
+  - cc --version
   script:
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --skip-po --no-git
@@ -130,34 +139,7 @@ Coverity:
   - time make syntax-check
   - time make -j$(nproc) V=1 VERBOSE=t check
   - time make -j$(nproc) V=1 VERBOSE=t distcheck
-  - git status
-  - git diff --exit-code
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git checkout -B cibranch
-  - git config user.email "pipeline@example.org"
-  - git config user.name "Pipeline Builder"
-  - git config user.signingkey pipeline@example.org
-  - |
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* out/$CI_JOB_NAME_SLUG/rel/
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
+  - !reference [.save-artifacts, script]
 
 B-AlmaLinux8:
   image: almalinux:8
@@ -182,44 +164,18 @@ B-RockyLinux9:
     DEBIAN_FRONTEND: noninteractive
   before_script:
   - cat /etc/os-release
-  - time apt-get update -qq
-  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless patch | tee pkgs.log | tail
+  - time apt-get update -q
+  - time apt-get install -y -q eatmydata
+  - time eatmydata apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless patch
   script:
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --skip-po --no-git
-  - time ./configure --enable-java --enable-gcc-warnings=error
-  - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - time make -j$(nproc) distcheck
-  - git status
-  - git diff --exit-code
-  - time apt-get install -y -q gpg gpgv
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git checkout -B cibranch
-  - git config user.email "pipeline@example.org"
-  - git config user.name "Pipeline Builder"
-  - git config user.signingkey pipeline@example.org
-  - |
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* out/$CI_JOB_NAME_SLUG/rel/
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
+  - time ./configure --enable-java --enable-gcc-warnings=error --enable-valgrind-tests
+  - time make syntax-check
+  - time make -j$(nproc) V=1 VERBOSE=t check
+  - make -C doc compare-makefile
+  - time make -j$(nproc) V=1 VERBOSE=t distcheck AM_DISTCHECK_DVI_TARGET=
+  - !reference [.save-artifacts, script]
 
 B-PureOS10:
   image: pureos/byzantium:latest
@@ -229,54 +185,44 @@ B-Debian11:
   image: debian:11-slim
   extends: .pureosdebian
 
+B-Devuan5:
+  image: devuan/devuan:daedalus
+  extends: .pureosdebian
+
+B-Debian12:
+  image: debian:12-slim
+  extends: .pureosdebian
+
 B-Trisquel11:
-  image: docker.io/kpengboy/trisquel:11.0
+  rules:
+  - when: always # this job is used by merge request jobs tagged with 'needs' on this job
+  image: kpengboy/trisquel:11.0
+  tags: [ saas-linux-medium-amd64 ]
   stage: build
+  variables:
+    DEBIAN_FRONTEND: noninteractive
   before_script:
   - cat /etc/os-release
-  - time apt-get update -y
-  - time apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell | tee pkgs.log | tail
+  - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
+  - time apt-get update -q
+  - time apt-get install -y -q eatmydata
+  - time eatmydata apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell libidn-dev
   script:
+  - env srcdir=tests tests/standalone.sh
+  - time apt-get remove -y --purge libidn-dev | tail
   - !reference [.gnulib-fetch, script]
-  - time ./bootstrap --no-git
-  - mkdir ../b
-  - cd ../b
-  - time ../libidn/configure --enable-java --enable-gcc-warnings=error
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --enable-gcc-warnings=error --enable-valgrind-tests
   - grep '^HAVE_DOTNET = $' Makefile > /dev/null
   - grep '^HAVE_MONO = 1$' Makefile > /dev/null
-  - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - time make -j$(nproc) distcheck
-  - git -C ../libidn status
-  - git -C ../libidn diff --exit-code
-  - time apt-get install -y -q gpg gpgv
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git -C ../libidn checkout -B cibranch
-  - git -C ../libidn config user.email "pipeline@example.org"
-  - git -C ../libidn config user.name "Pipeline Builder"
-  - git -C ../libidn config user.signingkey pipeline@example.org
-  - |
-    pushd ../libidn && \
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git -C ../libidn commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi && popd
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git -C ../libidn diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv ../libidn/out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} ../libidn/out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* ../libidn/out/$CI_JOB_NAME_SLUG/rel/
-  - mv -v *-src.tar.* ../libidn/out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* ../libidn/out/$CI_JOB_NAME_SLUG/
+  - time make syntax-check
+  - time make -j$(nproc) V=1 VERBOSE=t check
+  - make -C doc compare-makefile
+  - time make -j$(nproc) V=1 VERBOSE=t distcheck AM_DISTCHECK_DVI_TARGET=
+  - env STANDALONE_CFLAGS="-Ilib lib/.libs/libidn.a" tests/standalone.sh
+  - env STANDALONE_CFLAGS="-Ilib -Wl,-rpath lib/.libs lib/.libs/libidn.so" tests/standalone.sh
+  - make dist
+  - !reference [.save-artifacts, script]
 
 B-Ubuntu2204:
   image: ubuntu:22.04
@@ -286,49 +232,33 @@ B-Ubuntu2204:
     DEBIAN_FRONTEND: noninteractive
   before_script:
   - cat /etc/os-release
-  - time apt-get update -qq
-  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell datefudge | tee pkgs.log | tail
+  - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
+  - time apt-get update -q
+  - time apt-get install -y -q eatmydata
+  - time eatmydata apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell datefudge libidn-dev
   script:
+  - env srcdir=tests tests/standalone.sh
+  - time apt-get remove -y --purge libidn-dev | tail
   - !reference [.gnulib-fetch, script]
-  - ./bootstrap --no-git
+  - time datefudge "15 years" ./bootstrap --skip-po --no-git
   - mkdir b
   - cd b
-  - time datefudge "15 years" ../configure --enable-java --enable-gcc-warnings=error
+  - time datefudge "15 years" ../configure --enable-gcc-warnings=error --enable-valgrind-tests
   - grep '^HAVE_DOTNET = 1$' Makefile > /dev/null
   - grep '^HAVE_MONO = $' Makefile > /dev/null
-  - time datefudge "15 years" make -j$(nproc) syntax-check exclude_file_name_regexp--sc_copyright_check='version-etc.c|doc/libidn.texi'
-  - time datefudge "15 years" make -j$(nproc) check V=1 VERBOSE=t
-  - time datefudge "15 years" make -j$(nproc) distcheck
-  - git status
-  - git diff --exit-code
-  - time apt-get install -y -q gpg gpgv
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git checkout -B cibranch
-  - git config user.email "pipeline@example.org"
-  - git config user.name "Pipeline Builder"
-  - git config user.signingkey pipeline@example.org
-  - |
-    pushd ../ && \
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi && popd
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git diff --exit-code # nothing should change version controlled files
+  - time datefudge "15 years" make syntax-check exclude_file_name_regexp--sc_copyright_check='version-etc.c|doc/libidn.texi'
+  - time datefudge "15 years" make -j$(nproc) V=1 VERBOSE=t check
+  - time datefudge "15 years" make -j$(nproc) V=1 VERBOSE=t distcheck
+  - time datefudge "15 years" make -C doc compare-makefile
+  - time make -j$(nproc) V=1 VERBOSE=t distcheck AM_DISTCHECK_DVI_TARGET=
+  - env srcdir=../tests STANDALONE_CFLAGS="-I../lib -Ilib lib/.libs/libidn.a" ../tests/standalone.sh
+  - env srcdir=../tests STANDALONE_CFLAGS="-I../lib -Ilib -Wl,-rpath lib/.libs lib/.libs/libidn.so" ../tests/standalone.sh
+  - make dist
   - sha256sum *.tar.*
-  - mkdir -pv ../out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} ../out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* ../out/$CI_JOB_NAME_SLUG/rel/
+  - mkdir -pv ../out/$CI_JOB_NAME_SLUG/{src,log}
+  - find config.h *.log tests/*.log -exec mv -v {} ../out/$CI_JOB_NAME_SLUG/log/ \;
   - mv -v *-src.tar.* ../out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* ../out/$CI_JOB_NAME_SLUG/
+  - mv -v *.tar.* ../out/$CI_JOB_NAME_SLUG/
 
 B-Ubuntu2404-arm64:
   image: ubuntu:24.04
@@ -347,35 +277,7 @@ B-Ubuntu2404-arm64:
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck
-  - git status
-  - git diff --exit-code
-  - time apt-get install -y -q gpg gpgv
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git checkout -B cibranch
-  - git config user.email "pipeline@example.org"
-  - git config user.name "Pipeline Builder"
-  - git config user.signingkey pipeline@example.org
-  - |
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* out/$CI_JOB_NAME_SLUG/rel/
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
+  - !reference [.save-artifacts, script]
 
 B-Ubuntu2404:
   image: ubuntu:24.04
@@ -394,35 +296,7 @@ B-Ubuntu2404:
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck
-  - git status
-  - git diff --exit-code # nothing should change version controlled files
-  - time apt-get install -y -q gpg gpgv
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git checkout -B cibranch
-  - git config user.email "pipeline@example.org"
-  - git config user.name "Pipeline Builder"
-  - git config user.signingkey pipeline@example.org
-  - |
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* out/$CI_JOB_NAME_SLUG/rel/
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
+  - !reference [.save-artifacts, script]
 
 B-Alpine-arm64:
   image: alpine:latest
@@ -481,26 +355,6 @@ B-Debian9:
   - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
   - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
 
-B-Debian12:
-  image: debian:bookworm-slim
-  stage: build
-  before_script:
-  - time apt-get update
-  - time apt-get install -y -q make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless wget | tee pkgs.log | tail
-  script:
-  - !reference [.gnulib-fetch, script]
-  - time ./bootstrap --skip-po --no-git
-  - time ./configure --enable-java --enable-gcc-warnings=error
-  - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check VERBOSE=t
-  - time make -j$(nproc) dist
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
-
 B-Debian-testing:
   image: debian:testing-slim
   stage: build
@@ -531,7 +385,7 @@ B-Fedora-latest:
   before_script:
   - cat /etc/os-release
   - time dnf update -y
-  - time dnf install -y make git wget patch autoconf automake libtool gettext-devel cvs texinfo texinfo-tex texlive help2man gtk-doc gengetopt dblatex valgrind gperf java-latest-openjdk-devel mono-devel codespell | tee pkgs.log | tail
+  - time dnf install -y make git wget patch autoconf automake libtool gettext-devel glibc-gconv-extra cvs texinfo texinfo-tex texlive help2man gtk-doc gengetopt dblatex valgrind gperf java-latest-openjdk-devel mono-devel codespell | tee pkgs.log | tail
   script:
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --skip-po --no-git
@@ -546,7 +400,7 @@ B-Fedora-latest:
   - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
 
 B-Guix:
-  image: registry.gitlab.com/debdistutils/guix/container:latest
+  image: registry.gitlab.com/debdistutils/guix/container:extra
   stage: build
   before_script:
   - cp -rL /gnu/store/*profile/etc/* /etc/
@@ -558,78 +412,52 @@ B-Guix:
   - guix archive --authorize < /share/guix/ci.guix.gnu.org.pub
   - guix archive --authorize < /share/guix/bordeaux.guix.gnu.org.pub
   - guix describe
-  - time guix install --verbosity=0 gcc-toolchain libtool gengetopt gperf perl patch sed findutils autoconf automake make grep m4  gawk gettext tar xz diffutils python help2man pkgconf pkg-config python-codespell indent mono # gtk-doc texinfo fig2dev
+  - time guix install --verbosity=0 mono
   - GUIX_PROFILE="//.guix-profile"
   - . "$GUIX_PROFILE/etc/profile"
   script:
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --skip-po --no-git
-  - time ./configure --disable-doc --enable-gcc-warnings=error
+  - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
   - time make -j$(nproc) check V=1 VERBOSE=t
-  - make V=1 srcdist
-  - git diff --exit-code # nothing should change version controlled files
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,log}
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
+  - time make V=1 dist
+  - !reference [.save-artifacts, script]
 
-B-DebianGuix:
-  image: registry.gitlab.com/debdistutils/guix/container:debian-with-guix-amd64
-  stage: build
-  before_script:
-  - GUIX_PROFILE=/root/.config/guix/current; . "$GUIX_PROFILE/etc/profile"
-  - guix describe
-  - env LC_ALL=C.UTF-8 guix-daemon --build-users-group=_guixbuild &
-  - time apt-get install -qqy --no-install-recommends texlive texlive-plain-generic texlive-extra-utils | tee pkgs.log | tail
-  - time guix install git gcc-toolchain libtool gengetopt gperf perl patch sed findutils autoconf automake make grep m4 gawk gettext xz tar gzip diffutils python help2man pkgconf pkg-config indent gtk-doc texinfo fig2dev gnupg wget openjdk:jdk mono # texlive python-codespell
-  - GUIX_PROFILE="/root/.guix-profile"
-  - . "$GUIX_PROFILE/etc/profile"
-  script:
-  - !reference [.gnulib-fetch, script]
-  - time ./bootstrap --no-git
-  - time ./configure --enable-java --enable-gcc-warnings=error
-  - grep '^HAVE_DOTNET = $' Makefile > /dev/null
-  - grep '^HAVE_MONO = 1$' Makefile > /dev/null
-  - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - time make -j$(nproc) distcheck V=1 VERBOSE=t
-  - git status
-  - git diff --exit-code
-  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
-  - git checkout -B cibranch
-  - git config user.email "pipeline@example.org"
-  - git config user.name "Pipeline Builder"
-  - git config user.signingkey pipeline@example.org
-  - |
-    if grep '????-??-??' NEWS > /dev/null; then
-      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
-      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "17.42.23",' lib/stringprep.h
-      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
-      relver='17.42.23'
-      reltyp='alpha'
-    else # maintainer ran release-commit
-      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
-      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
-    fi
-  - test "$relver" != "17.42.23" || make release-commit RELEASE="$relver $reltyp"
-  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
-  - cat -n ~/announce-*
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - test "$relver" != "17.42.23" || mv -v *17.42.23* out/$CI_JOB_NAME_SLUG/rel/
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
-
-# https://docs.gitlab.com/ee/ci/runners/hosted_runners/macos.html
-B-MacOS14Xcode15:
+# https://docs.gitlab.com/ci/runners/hosted_runners/macos/
+B-macOS14Xcode15:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_MACOS_JOBS
   stage: build
   image: macos-14-xcode-15
   tags: [ saas-macos-medium-m1 ]
+  variables:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_UPGRADE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+    WERROR_CFLAGS: "-Wno-error=format-nonliteral -Wno-error=format-security"
+  before_script:
+  - brew install wget autoconf automake libtool gengetopt help2man texinfo fig2dev coreutils
+  script:
+  - PATH="$HOMEBREW_PREFIX/opt/coreutils/libexec/gnubin:$PATH"; export PATH
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --enable-gcc-warnings=error
+  - make -j$(nproc) syntax-check
+  - make -j$(nproc) check -k V=1 VERBOSE=t
+  - git diff --exit-code # nothing should change version controlled files
+
+B-macOS15Xcode16:
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $LIBIDN_CI_RUN_MACOS_JOBS
+  stage: build
+  image: macos-15-xcode-16
+  tags: [ saas-macos-large-m2pro ]
   variables:
     HOMEBREW_NO_AUTO_UPDATE: 1
     HOMEBREW_NO_INSTALL_UPGRADE: 1
@@ -671,42 +499,40 @@ B-clang:
   image: silkeh/clang:latest
   stage: build
   before_script:
-  - clang --version
   - cat /etc/os-release
-  - time apt-get update -qq
-  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs help2man gengetopt gperf | tee pkgs.log | tail
-  script:
   - clang --version
+  - time apt-get update -q
+  - time apt-get install -y -q --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs help2man gengetopt gperf
+  script:
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --skip-po --no-git
-  - time ./configure CC="clang -std=gnu2x" --enable-gcc-warnings=error --disable-doc
-  - time make -j$(nproc) V=1
-  - time make -j$(nproc) check V=1 VERBOSE=t
-  - git diff --exit-code # nothing should change version controlled files
+  - time ./configure --enable-gcc-warnings=error CC="clang -std=gnu2x" --disable-doc
+  - time make -k syntax-check
+  - time make V=1 VERBOSE=t check clean
+  - time ./configure --enable-gcc-warnings=error CC="clang -std=c23"
 
 B-gcc:
   image: gcc:latest
   stage: build
   before_script:
-  - gcc --version
   - cat /etc/os-release
-  - time apt-get update -qqy
-  - time apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs help2man valgrind gengetopt gperf | tee pkgs.log | tail
-  script:
   - gcc --version
+  - time apt-get update -q
+  - time apt-get install  -y -q --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs help2man valgrind gengetopt gperf
+  script:
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --skip-po --no-git
-  - time ./configure CC="gcc -std=gnu2x" --enable-gcc-warnings=error --disable-doc
-  - time make -j$(nproc) V=1
-  - time make -j$(nproc) syntax-check
-  - time make -j$(nproc) check VERBOSE=t
-  - git diff --exit-code # nothing should change version controlled files
+  - time ./configure --enable-gcc-warnings=error CC="gcc -std=gnu2x" --disable-doc
+  - time make -k syntax-check
+  - time make V=1 VERBOSE=t check clean
+  - time ./configure --enable-gcc-warnings CC="gcc -std=c23"
 
 # https://docs.gitlab.com/ee/ci/runners/hosted_runners/windows.html
 B-Windows-UCRT64:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_WINDOWS_JOBS
   tags: [ saas-windows-medium-amd64 ]
   stage: build
   variables:
@@ -736,7 +562,7 @@ B-Windows-UCRT64:
 0-compare:
   image: alpine:latest
   stage: repro
-  needs: [ Q-Debian-testing, B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Debian-testing, B-Guix, B-DebianGuix, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404, R-Trisquel10, R-Ubuntu2004 ]
+  needs: [ Q-Debian-testing, B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Devuan5, B-Debian-testing, B-Guix, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404, R-Guix, R-Debian12, R-Ubuntu2404, S-Trisquel10, S-Ubuntu2004, R-Trisquel10, R-Ubuntu2004 ]
   script:
   - cd out
   - sha256sum */*.tar.* */*/*.tar.* | sort | grep    -- -src.tar.
@@ -744,28 +570,190 @@ B-Windows-UCRT64:
   - sha256sum */*.tar.* */*/*.tar.* | sort | uniq -c -w64 | sort -rn
   - sha256sum */*.tar.* */*/*.tar.* | grep    -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
   - sha256sum */*.tar.* */*/*.tar.* | grep -v -- -src.tar. | sort | uniq -c -w64 | grep -v '^      1 '
+# Confirm modern git-archive tarball reproducibility
   - cmp b-almalinux8/src/*.tar.gz b-almalinux9/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-debian-testing/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-debian12/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz b-devuan5/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-rockylinux8/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-rockylinux9/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-ubuntu-rolling/src/*.tar.gz
   - cmp b-almalinux8/src/*.tar.gz b-ubuntu2404-arm64/src/*.tar.gz
-  - cmp b-almalinux8/src/*.tar.gz b-ubuntu2404/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz r-debian12/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz r-guix/src/*.tar.gz
+  - cmp b-almalinux8/src/*.tar.gz r-ubuntu2404/src/*v1.*.tar.gz
+# Confirm old git-archive (export-subst but long git describe) tarball reproducibility
+  - cmp b-trisquel11/src/*.tar.gz b-ubuntu2204/src/*.tar.gz
+# Confirm really old git-archive (no export-subst) tarball reproducibility
   - cmp b-debian11/src/*.tar.gz b-debian9/src/*.tar.gz
   - cmp b-debian11/src/*.tar.gz b-pureos10/src/*.tar.gz
-  - cmp b-almalinux8/*.tar.gz b-rockylinux8/*.tar.gz
+# Confirm 'make dist' generated tarball reproducibility
   - cmp b-almalinux9/*.tar.gz b-rockylinux9/*.tar.gz
+  - cmp b-devuan5/*.tar.gz b-debian12/*.tar.gz
+  - cmp b-guix/*.tar.gz r-guix/*.tar.gz
   - cmp b-pureos10/*.tar.gz b-debian11/*.tar.gz
   - cmp b-trisquel11/*.tar.gz b-ubuntu2204/*.tar.gz
-  - cmp b-trisquel11/src/*.tar.gz b-ubuntu2204/src/*.tar.gz
   - cmp b-ubuntu2404-arm64/*.tar.gz b-ubuntu2404/*.tar.gz
   - cmp r-trisquel10/*.tar.gz r-ubuntu2004/*.tar.gz
+# Confirm 'make dist' from git-archive tarball reproducibility
+  - cmp s-trisquel10/*.tar.gz s-ubuntu2004/*.tar.gz
   artifacts:
     expire_in: 2 weeks
     when: always
     paths:
     - ./out/**
+
+R-Guix:
+  tags: [ saas-linux-medium-amd64 ]
+  image: registry.gitlab.com/debdistutils/guix/container:extra
+  stage: repro
+  needs: []
+  before_script:
+  - cp -rL /gnu/store/*profile/etc/* /etc/
+  - echo 'root:x:0:0:root:/:/bin/sh' > /etc/passwd
+  - echo 'root:x:0:' > /etc/group
+  - groupadd --system guixbuild
+  - for i in $(seq -w 1 10); do useradd -g guixbuild -G guixbuild -d /var/empty -s $(command -v nologin) -c "Guix build user $i" --system guixbuilder$i; done
+  - export HOME=/
+  - env LANG=C.UTF-8 guix-daemon --build-users-group=guixbuild &
+  - guix archive --authorize < /share/guix/ci.guix.gnu.org.pub
+  - guix archive --authorize < /share/guix/bordeaux.guix.gnu.org.pub
+  - guix describe
+  - time guix install --verbosity=0 mono
+  - GUIX_PROFILE="//.guix-profile"
+  - . "$GUIX_PROFILE/etc/profile"
+  script:
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --no-git
+  - time ./configure
+  - time make V=1 syntax-check
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - time make -j$(nproc) dist V=1 VERBOSE=t
+  - git status
+  - git diff --exit-code
+  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
+  - git checkout -B cibranch
+  - git config user.email "pipeline@example.org"
+  - git config user.name "Pipeline Builder"
+  - git config user.signingkey pipeline@example.org
+  - |
+    if test -z "$CI_COMMIT_TAG"; then
+      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
+      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "97.23.42",' lib/stringprep.h
+      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
+      relver='97.23.42'
+      reltyp='alpha'
+    else # maintainer ran release-commit
+      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
+      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
+    fi
+  - test "$relver" != "97.23.42" || make release-commit RELEASE="$relver $reltyp"
+  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t AM_DISTCHECK_DVI_TARGET=
+  - cat -n ~/announce-*
+  - git diff --exit-code # nothing should change version controlled files
+  - sha256sum *.tar.*
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
+  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
+  - test "$relver" != "97.23.42" || mv -v *97.23.42* out/$CI_JOB_NAME_SLUG/rel/
+  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
+  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
+
+R-Debian12:
+  tags: [ saas-linux-medium-amd64 ]
+  image: debian:12-slim
+  stage: repro
+  needs: []
+  before_script:
+  - cat /etc/os-release
+  - time apt-get update -q
+  - time apt-get install -y -q eatmydata
+  - time apt-get update
+  - time eatmydata apt-get install -y -q make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless wget
+  script:
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --enable-gcc-warnings=error
+  - time make syntax-check
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - time make -j$(nproc) dist
+  - sha256sum *.tar.*
+  - git status
+  - git diff --exit-code
+  - time apt-get install -y -q --no-install-recommends gpg gpgv2 gpg-agent
+  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
+  - git checkout -B cibranch
+  - git config user.email "pipeline@example.org"
+  - git config user.name "Pipeline Builder"
+  - git config user.signingkey pipeline@example.org
+  - |
+    if test -z "$CI_COMMIT_TAG"; then
+      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
+      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "97.23.42",' lib/stringprep.h
+      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
+      relver='97.23.42'
+      reltyp='alpha'
+    else # maintainer ran release-commit
+      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
+      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
+    fi
+  - test "$relver" != "97.23.42" || make release-commit RELEASE="$relver $reltyp"
+  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
+  - cat -n ~/announce-*
+  - git diff --exit-code # nothing should change version controlled files
+  - sha256sum *.tar.*
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
+  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
+  - test "$relver" != "97.23.42" || mv -v *97.23.42* out/$CI_JOB_NAME_SLUG/rel/
+  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
+  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
+
+R-Ubuntu2404:
+  image: ubuntu:24.04
+  tags: [ saas-linux-medium-amd64 ]
+  stage: repro
+  needs: []
+  before_script:
+  - cat /etc/os-release
+  - time apt-get update -q
+  - time apt-get install -y -q eatmydata
+  - time eatmydata apt-get install -qqy --no-install-recommends make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig dotnet8 gperf default-jdk-headless patch codespell indent
+  script:
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --enable-gcc-warnings
+  - time make -j$(nproc) syntax-check
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - time make -j$(nproc) dist
+  - sha256sum *.tar.*
+  - git status
+  - git diff --exit-code # nothing should change version controlled files
+  - apt-get install -y -q gpg gpgv
+  - gpg --batch --passphrase '' --quick-gen-key pipeline@example.org
+  - git checkout $CI_COMMIT_BRANCH
+  - git config user.email "pipeline@example.org"
+  - git config user.name "Pipeline Builder"
+  - git config user.signingkey pipeline@example.org
+  - |
+    if test -z "$CI_COMMIT_TAG"; then
+      sed -i '3i * Noteworthy changes in release ?.? (????-??-??) [?]\n\n** WARNING This release was prepared automatically with no testing.\n' NEWS
+      sed -i -e 's,STRINGPREP_VERSION ".*",STRINGPREP_VERSION "97.23.42",' lib/stringprep.h
+      git commit -m "Warn about automatic release." NEWS lib/stringprep.h
+      relver='97.23.42'
+      reltyp='alpha'
+    else # maintainer ran release-commit
+      relver=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\1/p' | head -1)
+      reltyp=$(cat NEWS | sed -n -e 's/.*release \([0-9.]\+\) (....-..-..) \[\(.*\)\].*/\2/p' | head -1)
+    fi
+  - test "$relver" != "97.23.42" || make release-commit RELEASE="$relver $reltyp"
+  - make release RELEASE="$relver $reltyp" V=1 VERBOSE=t
+  - cat -n ~/announce-*
+  - git diff --exit-code # nothing should change version controlled files
+  - sha256sum *.tar.*
+  - mkdir -pv out/$CI_JOB_NAME_SLUG/{src,rel,log}
+  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
+  - test "$relver" != "97.23.42" || mv -v *97.23.42* out/$CI_JOB_NAME_SLUG/rel/
+  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
+  - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
 
 R-Trisquel10:
   tags: [ saas-linux-medium-amd64 ]
@@ -774,18 +762,15 @@ R-Trisquel10:
   needs: [Q-Debian-testing]
   before_script:
   - cat /etc/os-release
-  - time apt-get update -qq
-  - time apt-get install -y --no-install-recommends make git wget ca-certificates autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell datefudge patch | tee pkgs.log | tail
+  - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
+  - time apt-get update -q
+  - time apt-get install -q -y --no-install-recommends make git wget ca-certificates autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell datefudge patch
   script:
   - mkdir -pv ../b
   - cd ../b
   - tar xfz ../libidn/out/q-debian-testing/src/libidn-*.tar.gz
   - cd $(tar tfa ../libidn/out/q-debian-testing/src/libidn-*.tar.gz | head -n1)
-  - GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
-  - wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
-  - gzip -cd gnulib-mirror-$GNULIB_REVISION.tar.gz | tar xf -
-  - rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
-  - export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
+  - !reference [.gnulib-fetch, script]
   - time datefudge "5 years" ./bootstrap --skip-po --no-git
   - time datefudge "5 years" ./configure --enable-gcc-warnings=error
   - grep '^HAVE_DOTNET = $' Makefile > /dev/null
@@ -812,11 +797,7 @@ R-Ubuntu2004:
   script:
   - tar xfz out/q-debian-testing/src/libidn-*.tar.gz
   - cd $(tar tfa out/q-debian-testing/src/libidn-*.tar.gz | head -n1)
-  - GNULIB_REVISION=$(. bootstrap.conf; echo $GNULIB_REVISION)
-  - wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
-  - gzip -cd gnulib-mirror-$GNULIB_REVISION.tar.gz | tar xf -
-  - rm -fv gnulib-mirror-$GNULIB_REVISION.tar.gz
-  - export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
+  - !reference [.gnulib-fetch, script]
   - time datefudge "5 years ago" ./bootstrap --skip-po --no-git
   - time datefudge "5 years ago" ./configure --enable-gcc-warnings=error
   - grep '^HAVE_DOTNET = $' Makefile > /dev/null
@@ -826,6 +807,62 @@ R-Ubuntu2004:
   - time datefudge "5 years ago" make -j$(nproc) distcheck
   - sha256sum *.tar.*
   - mkdir -pv ../out/$CI_JOB_NAME_SLUG/log
+  - find config.h *.log tests/*.log -exec mv -v {} ../out/$CI_JOB_NAME_SLUG/log \;
+  - mv -v *.tar.* ../out/$CI_JOB_NAME_SLUG/
+
+S-Trisquel10:
+  tags: [ saas-linux-medium-amd64 ]
+  image: docker.io/kpengboy/trisquel:10.0
+  stage: repro
+  needs: [B-Trisquel11]
+  before_script:
+  - cat /etc/os-release
+  - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
+  - time apt-get update -y
+  - time apt-get install -y -q eatmydata
+  - time eatmydata apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
+  script:
+  - mkdir -pv ../b
+  - cd ../b
+  - tar xfz ../*/out/b-trisquel11/src/*-*.tar.gz
+  - cd $(tar tfa ../*/out/b-trisquel11/src/*-*.tar.gz | head -n1)
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --no-git
+  - time ./configure --enable-gcc-warnings=error
+  - grep '^VERSION = ' Makefile | grep -v UNKNOWN
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - src/idn --version | head -1 | grep -v UNKNOWN
+  - time make -j$(nproc) dist AM_DISTCHECK_DVI_TARGET=
+  - sha256sum *.tar.*
+  - mkdir -pv $CI_PROJECT_DIR/out/$CI_JOB_NAME_SLUG/{src,log}
+  - find config.h *.log tests/*.log -exec mv -v {} $CI_PROJECT_DIR/out/$CI_JOB_NAME_SLUG/log \;
+  - mv -v *.tar.* $CI_PROJECT_DIR/out/$CI_JOB_NAME_SLUG/
+
+S-Ubuntu2004:
+  tags: [ saas-linux-medium-amd64 ]
+  image: ubuntu:20.04
+  stage: repro
+  needs: [B-Trisquel11]
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+  before_script:
+  - cat /etc/os-release
+  - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
+  - time apt-get update -y
+  - time apt-get install -y -q eatmydata
+  - time eatmydata apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt transfig mono-mcs gperf default-jdk-headless codespell
+  script:
+  - tar xfz out/b-trisquel11/src/*-*.tar.gz
+  - cd $(tar tfa out/b-trisquel11/src/*-*.tar.gz | head -n1)
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --no-git
+  - time ./configure --enable-gcc-warnings=error
+  - grep '^VERSION = ' Makefile | grep -v UNKNOWN
+  - time make -j$(nproc) check V=1 VERBOSE=t
+  - src/idn --version | head -1 | grep -v UNKNOWN
+  - time make -j$(nproc) dist AM_DISTCHECK_DVI_TARGET=
+  - sha256sum *.tar.*
+  - mkdir -pv ../out/$CI_JOB_NAME_SLUG/{src,log}
   - find config.h *.log tests/*.log -exec mv -v {} ../out/$CI_JOB_NAME_SLUG/log \;
   - mv -v *.tar.* ../out/$CI_JOB_NAME_SLUG/
 
@@ -880,8 +917,9 @@ AlmaLinux10-arm64:
 
 AlmaLinux10-ppc64:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_PPC64_JOBS
   tags: [ ppc64 ]
   image: almalinux:10-kitten
   stage: test
@@ -1016,8 +1054,9 @@ Debian10:
 
 Debian12-ppc64:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_PPC64_JOBS
   tags: [ ppc64 ]
   image: debian:12
   stage: test
@@ -1120,8 +1159,9 @@ OpenBSD:
 
 RockyLinux9-ppc64:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_PPC64_JOBS
   tags: [ ppc64 ]
   image: rockylinux:9
   stage: test
@@ -1183,8 +1223,9 @@ Ubuntu-rolling:
 
 Windows-MSYS:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_WINDOWS_JOBS
   tags: [ saas-windows-medium-amd64 ]
   stage: test
   needs: [B-Trisquel11]
@@ -1210,8 +1251,9 @@ Windows-MSYS:
 
 Windows-MINGW64:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_WINDOWS_JOBS
   tags: [ saas-windows-medium-amd64 ]
   stage: test
   needs: [B-Trisquel11]
@@ -1237,8 +1279,9 @@ Windows-MINGW64:
 
 macOS13Xcode14:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
+  - if: $LIBIDN_CI_RUN_MACOS_JOBS
   image: macos-13-xcode-14
   tags: [ saas-macos-medium-m1 ]
   stage: test
@@ -1269,8 +1312,9 @@ macOS13Xcode14:
   - rm -rf public/reference
   - mv doc/reference/html public/reference
   - make web-manual
+  - test -f doc/manual/libidn.pdf
   - rm -rf public/manual
-  - mv doc/manual public/manual
+  - mv -v doc/manual public/manual
   artifacts:
     when: on_success
     paths:

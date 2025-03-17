@@ -1,9 +1,23 @@
 # Contributing to Libidn
 
-This file contains instructions for developers and advanced users that
-wants to build from version controlled sources.
+This file contains instructions for developers and advanced users.
 
-We rely on several tools to build the software, including:
+## Obtaining sources
+
+Download the version controlled sources:
+```
+$ git clone https://git.savannah.gnu.org/git/libidn.git
+$ cd libidn
+```
+
+## Dependencies
+
+If you wish to build the project from version controlled sources,
+rebuild all generated files (e.g., run autoreconf), or modify some
+source code files, you will need to have additional tools installed
+beyond those mentioned in [DEPENDENCIES.md](DEPENDENCIES.md).  None of
+the following tools are necessary if you build Libidn in the usual way
+(i.e., ./configure && make).
 
 - Make <https://www.gnu.org/software/make/>
 - C compiler <https://www.gnu.org/software/gcc/>

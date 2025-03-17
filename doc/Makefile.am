@@ -34,7 +34,7 @@ imagesdir = $(infodir)
 images_DATA = libidn-components.png
 
 libidn-components.eps: components.fig
-	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L eps -n $@ $(srcdir)/components.fig | $(GREP) -v '^%%Creator:' > $@.tmp
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L eps -n $@ $(srcdir)/components.fig | $(SED) -e '/^%%Creator:/d' > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 libidn-components.png: components.fig
@@ -42,31 +42,31 @@ libidn-components.png: components.fig
 	$(AM_V_at)mv $@.tmp $@
 
 libidn-components.pdf: components.fig
-	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L pdf $(srcdir)/components.fig | $(GREP) -v -e '^CreationDate: ' -e '^ModDate: ' > $@.tmp
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L pdf $(srcdir)/components.fig | $(SED) -e '/^\/CreationDate/d' -e '/^\/ModDate/d' > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 idn-help.texi: $(top_srcdir)/src/idn.c
-	$(AM_V_GEN)$(top_builddir)/src/idn$(EXEEXT) --help | $(GREP) '^  *-' > $@.tmp
+	$(AM_V_GEN)env LANG=C $(top_builddir)/src/idn$(EXEEXT) --help | $(SED) -n -e '/^  *-/p' > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 example.txt: $(top_srcdir)/examples/example.c
-	$(AM_V_GEN)sed -e '/* example/,/^$$/d' $(top_srcdir)/examples/example.c > $@.tmp
+	$(AM_V_GEN)$(SED) -e '/* example/,/^$$/d' $(top_srcdir)/examples/example.c > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 example2.txt: $(top_srcdir)/examples/example2.c
-	$(AM_V_GEN)sed -e '/* example/,/^$$/d' $(top_srcdir)/examples/example2.c > $@.tmp
+	$(AM_V_GEN)$(SED) -e '/* example/,/^$$/d' $(top_srcdir)/examples/example2.c > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 example3.txt: $(top_srcdir)/examples/example3.c
-	$(AM_V_GEN)sed -e '/* example/,/^$$/d' $(top_srcdir)/examples/example3.c > $@.tmp
+	$(AM_V_GEN)$(SED) -e '/* example/,/^$$/d' $(top_srcdir)/examples/example3.c > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 example4.txt: $(top_srcdir)/examples/example4.c
-	$(AM_V_GEN)sed -e '/* example/,/^$$/d' $(top_srcdir)/examples/example4.c > $@.tmp
+	$(AM_V_GEN)$(SED) -e '/* example/,/^$$/d' $(top_srcdir)/examples/example4.c > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 example5.txt: $(top_srcdir)/examples/example5.c
-	$(AM_V_GEN)sed -e '/* example/,/^$$/d' $(top_srcdir)/examples/example5.c > $@.tmp
+	$(AM_V_GEN)$(SED) -e '/* example/,/^$$/d' $(top_srcdir)/examples/example5.c > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 BUILT_SOURCES = example.txt example2.txt example3.txt example4.txt example5.txt

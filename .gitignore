@@ -1,5 +1,4 @@
 !/gl/top/README-release.diff
-!/po/POTFILES.in
 *.gcda
 *.gcno
 *.lo
@@ -167,7 +166,18 @@
 /libidn-*.tar.gz.sig
 /libtool
 /maint.mk
-/po/
+/po/*.gmo
+/po/*.po
+/po/.gitignore
+/po/.reference/
+/po/LINGUAS
+/po/Makevars
+/po/POTFILES
+/po/en@boldquot.insert-header
+/po/en@quot.insert-header
+/po/libidn.pot
+/po/remove-potcdate.sed
+/po/stamp-po
 /pom.xml
 /scan.tmp
 /src/.deps/

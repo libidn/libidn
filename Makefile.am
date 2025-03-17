@@ -30,7 +30,7 @@ endif
 SUBDIRS += tests
 
 EXTRA_DIST = cfg.mk maint.mk
-EXTRA_DIST += CONTRIBUTING.md
+EXTRA_DIST += CONTRIBUTING.md DEPENDENCIES.md
 EXTRA_DIST += COPYING.LESSERv2 COPYING.LESSERv3 COPYINGv2
 
 ACLOCAL_AMFLAGS = -I lib/m4 -I gl/m4 -I lib/gl/m4 -I m4
@@ -52,40 +52,15 @@ EXTRA_DIST += windows/libidn.sln windows/libidn.vcproj			\
 	windows/include/stdbool.h windows/include/ac-stdint.h		\
 	windows/include/config.h windows/libidn4win.mk
 
-# git-version-gen
+# version-stamp
 EXTRA_DIST += $(top_srcdir)/.version
 BUILT_SOURCES = $(top_srcdir)/.version
-$(top_srcdir)/.version:
-	echo $(VERSION) > $@-t && mv $@-t $@
-dist-hook: gen-ChangeLog
-	echo $(VERSION) > $(distdir)/.tarball-version
 
-.PHONY: gen-ChangeLog
-gen-ChangeLog:
-	$(AM_V_GEN)if test -e $(srcdir)/.git; then			\
-	  LC_ALL=en_US.UTF-8 TZ=UTC0					\
-	    $(top_srcdir)/build-aux/gitlog-to-changelog			\
-	      --srcdir=$(srcdir) --					\
-	      v$(PREV_VERSION)~.. > $(distdir)/cl-t &&			\
-	    { printf '\n\nSee the source repo for older entries\n'	\
-	      >> $(distdir)/cl-t &&					\
-	      rm -f $(distdir)/ChangeLog &&				\
-	      mv $(distdir)/cl-t $(distdir)/ChangeLog; }		\
-	fi
-
-GIT_NEWS_MTIME_CMD = git -C $(srcdir) log -1 --format=%ct
-dist-hook: mtime-NEWS-to-git-HEAD
-.PHONY: mtime-NEWS-to-git-HEAD
-mtime-NEWS-to-git-HEAD:
-	$(AM_V_GEN)if test -e $(srcdir)/.git \
-			&& command -v git > /dev/null; then \
-		touch -m -d @"$$($(GIT_NEWS_MTIME_CMD))" $(srcdir)/NEWS; \
-	fi
-
-dist-hook: texi-stamps-to-mtime-NEWS
-.PHONY: texi-stamps-to-mtime-NEWS
-texi-stamps-to-mtime-NEWS: mtime-NEWS-to-git-HEAD
-	$(AM_V_GEN)touch -m -r $(srcdir)/NEWS $(srcdir)/doc/$(PACKAGE).texi
+# git-version-gen
+dist-hook: dist-tarball-version
+.PHONY: dist-tarball-version
+dist-tarball-version:
+	echo '$(VERSION)' > $(distdir)/.tarball-version
 
 dist-hook: po-CreationDate-to-mtime-NEWS
 .PHONY: po-CreationDate-to-mtime-NEWS
@@ -107,11 +82,33 @@ srcdist:
 	$(AM_V_GEN)if test -e $(srcdir)/.git \
 			&& command -v git > /dev/null; then \
 	 cd $(srcdir) && \
-	   git archive --prefix=$(PACKAGE)-$$(git describe)/ \
-	       -o $(abs_builddir)/$(PACKAGE)-$$(git describe)-src.tar.gz HEAD; \
+	   git archive --prefix=$(PACKAGE)-v$(VERSION)/ \
+	       -o $(abs_builddir)/$(PACKAGE)-v$(VERSION)-src.tar.gz HEAD; \
 	fi
 
-distclean-local: distclean-local-srcdist
-.PHONY: distclean-local-srcdist
-distclean-local-srcdist:
-	-rm -f $(builddir)/$(PACKAGE)-*-src.tar.gz
+dist-hook: mtime-NEWS-to-git-HEAD
+.PHONY: mtime-NEWS-to-git-HEAD
+mtime-NEWS-to-git-HEAD:
+	$(AM_V_GEN)if test -e $(srcdir)/.git \
+			&& command -v git > /dev/null; then \
+		touch -m -t "$$(git log -1 --format=%cd --date=format-local:%Y%m%d%H%M.%S)" $(srcdir)/NEWS; \
+	fi
+
+dist-hook: texi-stamps-to-mtime-NEWS
+.PHONY: texi-stamps-to-mtime-NEWS
+texi-stamps-to-mtime-NEWS: mtime-NEWS-to-git-HEAD
+	$(AM_V_GEN)touch -m -r $(srcdir)/NEWS $(srcdir)/doc/$(PACKAGE).texi
+
+dist-hook: gen-ChangeLog
+.PHONY: gen-ChangeLog
+gen-ChangeLog:
+	$(AM_V_GEN)if test -e $(srcdir)/.git; then			\
+	  LC_ALL=en_US.UTF-8 TZ=UTC0					\
+	    $(top_srcdir)/build-aux/gitlog-to-changelog			\
+	      --srcdir=$(srcdir) --					\
+	      v$(PREV_VERSION)~.. > $(distdir)/cl-t &&			\
+	    { printf '\n\nSee the source repo for older entries\n'	\
+	      >> $(distdir)/cl-t &&					\
+	      rm -f $(distdir)/ChangeLog &&				\
+	      mv $(distdir)/cl-t $(distdir)/ChangeLog; }		\
+	fi
