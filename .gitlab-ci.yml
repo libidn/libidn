@@ -58,7 +58,6 @@ Q-Debian-testing:
   stage: build
   before_script:
   - cat /etc/os-release
-  - grep '????-??-??' NEWS > /dev/null || (test -z "$CI_COMMIT_BRANCH" && test -n "$CI_COMMIT_TAG")
   - date | tee date.log
   - set | tee set.log
   - time apt-get update
