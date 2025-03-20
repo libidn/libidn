@@ -21,29 +21,43 @@ if ENABLE_GTK_DOC
 SUBDIRS += . reference
 endif
 
-EXTRA_DIST = gdoc components.fig
+EXTRA_DIST = gdoc components.dot
 
 info_TEXINFOS = libidn.texi
 libidn_TEXINFOS = fdl-1.3.texi idn-help.texi
-libidn_TEXINFOS += example.txt example2.txt example3.txt example4.txt example5.txt
+libidn_TEXINFOS += example.txt example2.txt example3.txt
+libidn_TEXINFOS += example4.txt example5.txt
 libidn_TEXINFOS += $(gdoc_TEXINFOS)
-libidn_TEXINFOS += libidn-components.eps libidn-components.png	\
-			libidn-components.pdf
 
 imagesdir = $(infodir)
-images_DATA = libidn-components.png
+dist_images_DATA = libidn-components.png
 
-libidn-components.eps: components.fig
-	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L eps -n $@ $(srcdir)/components.fig | $(SED) -e '/^%%Creator:/d' > $@.tmp
+DISTCLEANFILES = \
+	libidn-components.eps libidn-components.png libidn-components.pdf
+
+libidn-components.eps: $(srcdir)/components.dot
+	$(AM_V_GEN)$(DOT) -Nfontsize=9 -Teps < $< > $@.tmp
+	$(AM_V_at)! grep %%CreationDate $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
-libidn-components.png: components.fig
-	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L png $(srcdir)/components.fig > $@.tmp
+libidn-components.pdf: $(srcdir)/components.dot
+	$(AM_V_GEN)$(DOT) -Nfontsize=9 -Tpdf < $< > $@.tmp
+# A simple sed on CreationDate is no longer possible due to compression.
+# 'exiftool -CreateDate' is alternative to 'gs', but adds ~4kb to file.
+# Ghostscript add <1kb.  Why can't 'dot' avoid setting CreationDate?
+	$(AM_V_at)printf '[ /ModDate ()\n  /CreationDate ()\n  /DOCINFO pdfmark\n' > pdfmarks
+	$(AM_V_at)$(GS) -q -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -sOutputFile=$@.tmp2 $@.tmp pdfmarks
+	$(AM_V_at)rm -f $@.tmp pdfmarks
+	$(AM_V_at)mv $@.tmp2 $@
+
+libidn-components.png: $(srcdir)/components.dot
+	$(AM_V_GEN)$(DOT) -Nfontsize=9 -Tpng < $< > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
-libidn-components.pdf: components.fig
-	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 fig2dev -L pdf $(srcdir)/components.fig | $(SED) -e '/^\/CreationDate/d' -e '/^\/ModDate/d' > $@.tmp
-	$(AM_V_at)mv $@.tmp $@
+pdf-recursive: libidn-components.pdf
+dvi-recursive: libidn-components.eps
+ps-recursive: libidn-components.eps
+info-recursive: $(top_srcdir)/.version libidn-components.png
 
 idn-help.texi: $(top_srcdir)/src/idn.c
 	$(AM_V_GEN)env LANG=C $(top_builddir)/src/idn$(EXEEXT) --help | $(SED) -n -e '/^  *-/p' > $@.tmp

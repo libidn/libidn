@@ -50,6 +50,8 @@ AM_PROG_AR
 LT_INIT([win32-dll])
 AM_MISSING_PROG(PERL, perl, $missing_dir)
 AM_MISSING_PROG(HELP2MAN, help2man, $missing_dir)
+AM_MISSING_PROG([DOT], [dot])
+AM_MISSING_PROG([GS], [gs])
 AM_ICONV
 AM_PATH_LISPDIR
 

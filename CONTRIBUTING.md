@@ -38,7 +38,8 @@ the following tools are necessary if you build Libidn in the usual way
 - Valgrind <https://valgrind.org/> (optional)
 - OpenJDK (for java port)
 - Mono mcs <https://www.mono-project.com/> (for C# port)
-- fig2dev <https://sourceforge.net/projects/mcj/>
+- dot <https://www.graphviz.org/> (to generate doc/libidn-components.*)
+- Ghostscript <https://www.ghostscript.com/> (to edit PDF timestamps)
 
 The software is typically distributed with your operating system, and
 the instructions for installing them differ.  Here are some hints:
@@ -48,7 +49,7 @@ APT/DPKG-based distributions:
 apt-get install make git autoconf automake libtool gettext autopoint cvs
 apt-get install texinfo texlive texlive-plain-generic texlive-extra-utils
 apt-get install help2man gtk-doc-tools dblatex valgrind gengetopt
-apt-get install transfig mono-mcs gperf default-jdk-headless
+apt-get install graphviz ghostscript mono-mcs gperf default-jdk-headless
 ```
 
 DNF/RPM-based distributions:
@@ -61,7 +62,7 @@ dnf install -y gperf java-latest-openjdk-devel
 
 On macOS with Xcode and Homebrew:
 ```
-brew install autoconf automake libtool gengetopt help2man texinfo fig2dev
+brew install autoconf automake libtool gengetopt help2man texinfo graphviz
 ```
 
 To download the version controlled sources:

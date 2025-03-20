@@ -28,6 +28,8 @@ idn_LDADD = libidn_cmd.la ../lib/libidn.la ../gl/libgnu.la $(LTLIBINTL)
 
 localedir = $(datadir)/locale
 
+EXTRA_idn_DEPENDENCIES = $(top_srcdir)/.version
+
 idn.c: $(BUILT_SOURCES)
 
 noinst_LTLIBRARIES = libidn_cmd.la
