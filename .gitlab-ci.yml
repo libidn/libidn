@@ -552,10 +552,17 @@ B-Windows-UCRT64:
   - $env:MSYSTEM = 'UCRT64' # https://www.msys2.org/docs/environments/
   - C:\msys64\usr\bin\bash -lc ' '
   - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
   - |
     C:\msys64\usr\bin\bash -lcx '
     pacman --noconfirm -Syu git wget autoconf automake libtool make mingw-w64-ucrt-x86_64-gcc python gtk-doc help2man gengetopt gperf patch gettext-devel
+    # https://docs.github.com/en/get-started/getting-started-with-git/configuring-git-to-handle-line-endings
+    file configure.ac
+    git config --global core.autocrlf false
+    git config --global core.eol lf
+    git rm -rf --cached . | tail
+    git reset --hard HEAD
+    git status
+    git describe
     GNULIB_REVISION=$(. bootstrap.conf >&2; echo $GNULIB_REVISION)
     wget -nv https://gitlab.com/libidn/gnulib-mirror/-/archive/$GNULIB_REVISION/gnulib-mirror-$GNULIB_REVISION.tar.gz
     tar xfa gnulib-mirror-$GNULIB_REVISION.tar.gz
@@ -563,13 +570,15 @@ B-Windows-UCRT64:
     export GNULIB_SRCDIR=gnulib-mirror-$GNULIB_REVISION
     ./bootstrap --skip-po --no-git
     ./configure --enable-gcc-warnings=error --disable-doc
+    git status
     make -j$(nproc) V=1 -k check VERBOSE=t'
+  - C:\msys64\usr\bin\bash -lc 'grep PACKAGE_VERSION config.h | grep -v modified'
   - C:\msys64\usr\bin\bash -lc 'grep ^PASS tests/tst_idna.log'
 
 0-compare:
   image: alpine:latest
   stage: repro
-  needs: [ Q-Debian-testing, B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Devuan5, B-Debian-testing, B-Guix, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404, R-Guix, R-Debian12, R-Ubuntu2404, S-Trisquel10, S-Ubuntu2004, R-Trisquel10, R-Ubuntu2004 ]
+  needs: [ Q-Debian-testing, B-AlmaLinux8, B-AlmaLinux9, B-RockyLinux8, B-RockyLinux9, B-Trisquel11, B-Ubuntu2204, B-PureOS10, B-Debian11, B-Debian9, B-Debian12, B-Devuan5, B-Debian-testing, B-Guix, B-Fedora-latest, B-Ubuntu-rolling, B-Ubuntu2404-arm64, B-Ubuntu2404, R-Guix, R-Debian12, R-Ubuntu2404, S-Trisquel10, S-Ubuntu2004, T-Trisquel10, T-Ubuntu2004 ]
   script:
   - cd out
   - sha256sum */*.tar.* */*/*.tar.* | sort | grep    -- -src.tar.
@@ -602,7 +611,7 @@ B-Windows-UCRT64:
   - cmp b-pureos10/*.tar.gz b-debian11/*.tar.gz
   - cmp b-trisquel11/*.tar.gz b-ubuntu2204/*.tar.gz
   - cmp b-ubuntu2404-arm64/*.tar.gz b-ubuntu2404/*.tar.gz
-  - cmp r-trisquel10/*.tar.gz r-ubuntu2004/*.tar.gz
+  - cmp t-trisquel10/*.tar.gz t-ubuntu2004/*.tar.gz
 # Confirm 'make dist' from git-archive tarball reproducibility
   - cmp s-trisquel10/*.tar.gz s-ubuntu2004/*.tar.gz
   artifacts:
@@ -763,11 +772,11 @@ R-Ubuntu2404:
   - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
   - mv -v *.tar.* ~/announce-* out/$CI_JOB_NAME_SLUG/
 
-R-Trisquel10:
+T-Trisquel10:
   tags: [ saas-linux-medium-amd64 ]
   image: docker.io/kpengboy/trisquel:10.0
   stage: repro
-  needs: [Q-Debian-testing]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
@@ -776,8 +785,8 @@ R-Trisquel10:
   script:
   - mkdir -pv ../b
   - cd ../b
-  - tar xfz ../libidn/out/q-debian-testing/src/libidn-*.tar.gz
-  - cd $(tar tfa ../libidn/out/q-debian-testing/src/libidn-*.tar.gz | head -n1)
+  - tar xfz ../libidn/out/b-guix/src/libidn-*.tar.gz
+  - cd $(tar tfa ../libidn/out/b-guix/src/libidn-*.tar.gz | head -n1)
   - !reference [.gnulib-fetch, script]
   - time datefudge "5 years" ./bootstrap --skip-po --no-git
   - time datefudge "5 years" ./configure --enable-gcc-warnings=error
@@ -791,11 +800,11 @@ R-Trisquel10:
   - find config.h *.log tests/*.log -exec mv -v {} ../out/$CI_JOB_NAME_SLUG/log \;
   - mv -v *.tar.* ../../libidn/out/$CI_JOB_NAME_SLUG/
 
-R-Ubuntu2004:
+T-Ubuntu2004:
   tags: [ saas-linux-medium-amd64 ]
   image: ubuntu:20.04
   stage: repro
-  needs: [Q-Debian-testing]
+  needs: [B-Guix]
   variables:
     DEBIAN_FRONTEND: noninteractive
   before_script:
@@ -803,8 +812,8 @@ R-Ubuntu2004:
   - time apt-get update -qq
   - time apt-get install -y --no-install-recommends make git wget ca-certificates autoconf automake libtool gettext autopoint cvs texinfo texlive texlive-plain-generic texlive-extra-utils help2man gtk-doc-tools dblatex valgrind gengetopt graphviz ghostscript mono-mcs gperf default-jdk-headless codespell datefudge patch | tee pkgs.log | tail
   script:
-  - tar xfz out/q-debian-testing/src/libidn-*.tar.gz
-  - cd $(tar tfa out/q-debian-testing/src/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-guix/src/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/src/libidn-*.tar.gz | head -n1)
   - !reference [.gnulib-fetch, script]
   - time datefudge "5 years ago" ./bootstrap --skip-po --no-git
   - time datefudge "5 years ago" ./configure --enable-gcc-warnings=error
@@ -822,7 +831,7 @@ S-Trisquel10:
   tags: [ saas-linux-medium-amd64 ]
   image: docker.io/kpengboy/trisquel:10.0
   stage: repro
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - sed -i 's,http://archive.trisquel.info/trisquel,http://ftp.acc.umu.se/mirror/trisquel/packages,' /etc/apt/sources.list
@@ -832,8 +841,8 @@ S-Trisquel10:
   script:
   - mkdir -pv ../b
   - cd ../b
-  - tar xfz ../*/out/b-trisquel11/src/*-*.tar.gz
-  - cd $(tar tfa ../*/out/b-trisquel11/src/*-*.tar.gz | head -n1)
+  - tar xfz ../*/out/b-guix/src/*-*.tar.gz
+  - cd $(tar tfa ../*/out/b-guix/src/*-*.tar.gz | head -n1)
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --no-git
   - time ./configure --enable-gcc-warnings=error
@@ -850,7 +859,7 @@ S-Ubuntu2004:
   tags: [ saas-linux-medium-amd64 ]
   image: ubuntu:20.04
   stage: repro
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   variables:
     DEBIAN_FRONTEND: noninteractive
   before_script:
@@ -860,8 +869,8 @@ S-Ubuntu2004:
   - time apt-get install -y -q eatmydata
   - time eatmydata apt-get install -y make git wget autoconf automake libtool gettext autopoint cvs texinfo help2man gtk-doc-tools valgrind gengetopt graphviz mono-mcs gperf default-jdk-headless codespell
   script:
-  - tar xfz out/b-trisquel11/src/*-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/src/*-*.tar.gz | head -n1)
+  - tar xfz out/b-guix/src/*-*.tar.gz
+  - cd $(tar tfa out/b-guix/src/*-*.tar.gz | head -n1)
   - !reference [.gnulib-fetch, script]
   - time ./bootstrap --no-git
   - time ./configure --enable-gcc-warnings=error
@@ -877,36 +886,36 @@ S-Ubuntu2004:
 AlmaLinux8:
   image: almalinux:8
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - time dnf -y install make gcc diffutils valgrind | tee pkgs.log | tail
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 AlmaLinux10:
   image: almalinux:10-kitten
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - dnf -y install make gcc diffutils valgrind gzip
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 AlmaLinux10-clang:
   image: almalinux:10-kitten
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - dnf -y install make clang diffutils valgrind gzip
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure CC=clang --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -914,12 +923,12 @@ AlmaLinux10-arm64:
   image: almalinux:10-kitten
   tags: [ saas-linux-small-arm64 ]
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - dnf -y install make gcc diffutils valgrind gzip
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
@@ -933,19 +942,19 @@ AlmaLinux10-ppc64:
   tags: [ ppc64 ]
   image: almalinux:10-kitten
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - dnf -y install make gcc diffutils valgrind gzip
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Alpine-mold:
   image: alpine:latest
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - apk update
@@ -953,8 +962,8 @@ Alpine-mold:
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral"
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error CC='cc -fuse-ld=mold'
   - make -j$(nproc) check V=1 VERBOSE=t 2>&1 | tee build.log
   - (! grep -E 'mold. warning' build.log)
@@ -963,13 +972,13 @@ Alpine-mold:
 ArchLinux:
   image: archlinux:latest
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - pacman -Syu --noconfirm make gcc diffutils
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error
@@ -978,14 +987,14 @@ ArchLinux:
 Armcross:
   image: debian:12-slim
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - time apt-get update -qq
   - time apt-get install -y -qq make gcc-arm-linux-gnueabi qemu-user qemu-user-binfmt file binfmt-support | tee pkgs.log | tail
   - update-binfmts --enable qemu-arm
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - mkdir b
   - cd b
   - ../configure --enable-gcc-warnings=error --host=arm-linux-gnueabi CFLAGS="-static --static"
@@ -997,66 +1006,66 @@ Armcross:
 OracleLinux7:
   image: oraclelinux:7
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - yum -y install make gcc diffutils valgrind
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Debian3:
   image: debian/eol:woody
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - time apt-get update
   - time apt-get install -y -qq make gcc libc-dev
   script:
-  - tar xfz out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfz out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings
   - time make check V=1 VERBOSE=t
 
 Debian3.1:
   image: debian/eol:sarge
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - time apt-get update
   - time apt-get install -y -qq make gcc libc-dev
   script:
-  - tar xfz out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfz out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make check V=1 VERBOSE=t
 
 Debian4:
   image: debian/eol:etch
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - time apt-get update
   - time apt-get install -y -qq make gcc libc-dev
   script:
-  - tar xfz out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfz out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make check V=1 VERBOSE=t
 
 Debian10:
   image: debian:10-slim
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - time apt-get update
   - time apt-get install -y -qq make gcc
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error
@@ -1072,14 +1081,14 @@ Debian12-ppc64:
   tags: [ ppc64 ]
   image: debian:12
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - time apt-get update
   - time apt-get install -y -qq make gcc
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error
@@ -1088,20 +1097,20 @@ Debian12-ppc64:
 Fedora-latest:
   image: fedora:latest
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - dnf -y install make gcc diffutils valgrind
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Guix:
   image: registry.gitlab.com/debdistutils/guix/container:latest
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cp -rL /gnu/store/*profile/etc/* /etc/
   - echo 'root:x:0:0:root:/:/bin/sh' >> /etc/passwd
@@ -1113,15 +1122,15 @@ Guix:
   - guix archive --authorize < /share/guix/bordeaux.guix.gnu.org.pub
   - guix describe
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Mingw32:
   image: debian:12-slim
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - dpkg --add-architecture i386
   - time apt-get update -qq
@@ -1130,8 +1139,8 @@ Mingw32:
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error --host=i686-w64-mingw32 CC='i686-w64-mingw32-gcc -static-libgcc'
@@ -1140,7 +1149,7 @@ Mingw32:
 Mingw64:
   image: debian:12-slim
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - time apt-get update -qq
   - time apt-get install -y -qq make mingw-w64 wine wine64 binfmt-support wine-binfmt
@@ -1148,8 +1157,8 @@ Mingw64:
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - mkdir b
   - cd b
   - time ../configure --enable-gcc-warnings=error --host=x86_64-w64-mingw32
@@ -1158,14 +1167,14 @@ Mingw64:
 OpenBSD:
   tags: [ "openbsd" ]
   allow_failure: true
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   stage: test
   before_script:
   - uname -a
   - sysctl hw
   script:
-  - tar xfz out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfz out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfz out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfz out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make check V=1 VERBOSE=t
 
@@ -1179,35 +1188,35 @@ RockyLinux9-ppc64:
   tags: [ ppc64 ]
   image: rockylinux:9
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - dnf -y install make gcc valgrind
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Ubuntu12.04:
   image: ubuntu:12.04
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - perl -pi -e 's/archive.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
   - time apt-get update -q
   - time apt-get install -y -qq make gcc valgrind
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Ubuntu14.04:
   image: ubuntu:14.04
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - time apt-get update -qq
@@ -1215,22 +1224,22 @@ Ubuntu14.04:
   script:
   - mkdir -pv ../p
   - cd ../p
-  - tar xfa ../libidn/out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa ../libidn/out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa ../libidn/out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa ../libidn/out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --disable-tld --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
 Ubuntu-rolling:
   image: ubuntu:rolling
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - time apt-get update -qq
   - time apt-get install -y -qq git make gcc valgrind gtk-doc-tools texinfo texlive texlive-plain-generic graphviz
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - make -j$(nproc) distcheck
@@ -1239,14 +1248,14 @@ Ubuntu-rolling-arm64:
   image: ubuntu:rolling
   tags: [ saas-linux-small-arm64 ]
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   before_script:
   - cat /etc/os-release
   - time apt-get update -qq
   - time apt-get install -y -qq git make gcc valgrind gtk-doc-tools texinfo
   script:
-  - tar xfa out/b-trisquel11/libidn-*.tar.gz
-  - cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - (! make -j$(nproc) distcheck)
@@ -1261,7 +1270,7 @@ Windows-MSYS:
     when: manual
   tags: [ saas-windows-medium-amd64 ]
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=attributes -Wno-error=format-nonliteral -Wno-error=format-security"
   script: # https://www.msys2.org/docs/ci/#other-systems
@@ -1272,12 +1281,11 @@ Windows-MSYS:
   - $env:MSYSTEM = 'MSYS' # https://www.msys2.org/docs/environments/
   - C:\msys64\usr\bin\bash -lc ' '
   - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
   - |
     C:\msys64\usr\bin\bash -lcx '
     pacman --noconfirm -Syu make gcc
-    tar xfa out/b-trisquel11/libidn-*.tar.gz
-    cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+    tar xfa out/b-guix/libidn-*.tar.gz
+    cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
     ./configure --enable-gcc-warnings=error --disable-doc
     make -j$(nproc) V=1 -k check VERBOSE=t'
   - C:\msys64\usr\bin\bash -lc 'grep ^PASS libidn-*/tests/tst_idna.log'
@@ -1291,7 +1299,7 @@ Windows-MINGW64:
     when: manual
   tags: [ saas-windows-medium-amd64 ]
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   variables:
     WERROR_CFLAGS: "-Wno-error=unused-value -Wno-error=format-nonliteral -Wno-error=format-security -Wno-error=suggest-attribute=format"
   script: # https://www.msys2.org/docs/ci/#other-systems
@@ -1302,12 +1310,11 @@ Windows-MINGW64:
   - $env:MSYSTEM = 'MINGW64' # https://www.msys2.org/docs/environments/
   - C:\msys64\usr\bin\bash -lc ' '
   - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
-  - C:\msys64\usr\bin\bash -lc 'pacman --noconfirm -Syuu'
   - |
     C:\msys64\usr\bin\bash -lcx '
     pacman --noconfirm -Syu make mingw-w64-x86_64-gcc
-    tar xfa out/b-trisquel11/libidn-*.tar.gz
-    cd $(tar tfa out/b-trisquel11/libidn-*.tar.gz | head -n1)
+    tar xfa out/b-guix/libidn-*.tar.gz
+    cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
     ./configure --enable-gcc-warnings=error --disable-doc
     make -j$(nproc) V=1 -k check VERBOSE=t'
   - C:\msys64\usr\bin\bash -lc 'grep ^PASS libidn-*/tests/tst_idna.log'
@@ -1322,12 +1329,12 @@ macOS13Xcode14:
   image: macos-13-xcode-14
   tags: [ saas-macos-medium-m1 ]
   stage: test
-  needs: [B-Trisquel11]
+  needs: [B-Guix]
   variables:
     WERROR_CFLAGS: "-Wno-error=format-nonliteral -Wno-error=format-security"
   script:
-  - gzip -cd out/b-trisquel11/libidn-*.tar.gz | tar xf -
-  - cd $(gzip -cd out/b-trisquel11/libidn-*.tar.gz | tar tf - | head -n1)
+  - gzip -cd out/b-guix/libidn-*.tar.gz | tar xf -
+  - cd $(gzip -cd out/b-guix/libidn-*.tar.gz | tar tf - | head -n1)
   - mkdir b
   - cd b
   - ../configure --enable-gcc-warnings=error

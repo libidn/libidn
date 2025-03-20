@@ -59,7 +59,7 @@ dvi-recursive: libidn-components.eps
 ps-recursive: libidn-components.eps
 info-recursive: $(top_srcdir)/.version libidn-components.png
 
-idn-help.texi: $(top_srcdir)/src/idn.c
+idn-help.texi: idn.1
 	$(AM_V_GEN)env LANG=C $(top_builddir)/src/idn$(EXEEXT) --help | $(SED) -n -e '/^  *-/p' > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
