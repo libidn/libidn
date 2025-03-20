@@ -56,6 +56,9 @@ The command line tool, self tests, examples, and other auxiliary
 files, are licensed under the GNU General Public License version 3.0
 or later, see the file [COPYING](COPYING).
 
+The library embed data tables published by Unicode, Inc and The
+Internet Society (IETF), see [doc/specification/](doc/specification/).
+
 Other files are licensed as indicated in each file.  There may be
 exceptions to these general rules, see each file for precise
 information.

@@ -421,6 +421,7 @@ B-Guix:
   - time ./bootstrap --skip-po --no-git
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) syntax-check
+  - make texi-stamps-to-mtime-NEWS V=1 # align b-guix with r-guix on git tag's
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make V=1 dist
   - !reference [.save-artifacts, script]

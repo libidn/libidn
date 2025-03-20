@@ -41,6 +41,12 @@ The bug was found using GCC's static analyzer.
 
 ** The idn tool now binds the "gnulib" domain for translations.
 
+** Unicode tables are now rebuilt from source again.
+The lib/gen-unicode-tables.pl script stopped working with Perl 5.10
+and in 2008 we added the then-generated source code files to git.  Now
+we fixed the script to work with modern perl, so that gunibreak.h
+gunicomp.h gunidecomp.h can now be generated from source again.
+
 ** Update gnulib files and build fixes.
 
 * Noteworthy changes in release 1.42 (2024-01-13) [stable]

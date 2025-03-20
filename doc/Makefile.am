@@ -27,10 +27,10 @@ info_TEXINFOS = libidn.texi
 libidn_TEXINFOS = fdl-1.3.texi idn-help.texi
 libidn_TEXINFOS += example.txt example2.txt example3.txt
 libidn_TEXINFOS += example4.txt example5.txt
-libidn_TEXINFOS += $(gdoc_TEXINFOS)
+libidn_TEXINFOS += $(gdoc_TEXINFOS) libidn-components.png
 
 imagesdir = $(infodir)
-dist_images_DATA = libidn-components.png
+images_DATA = libidn-components.png
 
 DISTCLEANFILES = \
 	libidn-components.eps libidn-components.png libidn-components.pdf

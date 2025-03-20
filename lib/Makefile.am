@@ -81,9 +81,9 @@ endif
 
 SPEC = $(top_srcdir)/doc/specifications
 
-#nfkc.c: gunibreak.h gunicomp.h gunidecomp.h
-#gunibreak.h gunicomp.h gunidecomp.h: gen-unicode-tables.pl $(SPEC)/UnicodeData-3.2.0.txt $(SPEC)/LineBreak-3.2.0.txt $(SPEC)/SpecialCasing-3.2.0.txt $(SPEC)/CaseFolding-3.2.0.txt $(SPEC)/CompositionExclusions-3.2.0.txt
-#	$(PERL) $(srcdir)/gen-unicode-tables.pl -decomp 3.2 $(SPEC)
+nfkc.c: gunibreak.h gunicomp.h gunidecomp.h
+gunibreak.h gunicomp.h gunidecomp.h: gen-unicode-tables.pl $(SPEC)/UnicodeData-3.2.0.txt $(SPEC)/LineBreak-3.2.0.txt $(SPEC)/SpecialCasing-3.2.0.txt $(SPEC)/CaseFolding-3.2.0.txt $(SPEC)/CompositionExclusions-3.2.0.txt
+	$(PERL) $(srcdir)/gen-unicode-tables.pl -decomp 3.2 $(SPEC)
 
 rfc3454.c rfc3454.h: gen-stringprep-tables.pl
 	$(PERL) $(srcdir)/gen-stringprep-tables.pl $(SPEC)/rfc3454.txt

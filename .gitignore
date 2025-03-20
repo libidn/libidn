@@ -155,6 +155,9 @@
 /lib/.deps/
 /lib/.libs/
 /lib/gl/
+/lib/gunibreak.h
+/lib/gunicomp.h
+/lib/gunidecomp.h
 /lib/idn-int.h
 /lib/libidn.la
 /lib/libidn.pc
