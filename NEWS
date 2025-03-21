@@ -1,6 +1,6 @@
 Libidn NEWS -- History of user-visible changes.                 -*- outline -*-
 
-* Noteworthy changes in release ?.? (????-??-??) [?]
+* Noteworthy changes in release 1.43 (2025-03-21) [stable]
 
 ** The release tarball is now reproducible.
 Builds on the following pairs of systems are tested continuously in
