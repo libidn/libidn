@@ -17,7 +17,7 @@
 
 manual_title = Internationalized Domain Names Library
 
-old_NEWS_hash = a64ec7fa8abeb91277eb3479d79c2272
+old_NEWS_hash = 9427ab7d2d1ab949f4fb9788284e9a64
 
 guix = $(shell command -v guix > /dev/null && echo ,guix)
 bootstrap-tools = git,gnulib,autoconf,automake,libtoolize,make,makeinfo,help2man,gperf,gengetopt,gtkdocize,tar,gzip$(guix)
