@@ -93,7 +93,7 @@ MAINTAINERCLEANFILES = $(dist_man_MANS)
 idn.1: $(top_srcdir)/src/idn.c $(top_srcdir)/src/idn.ggo $(top_srcdir)/.version
 	$(MAKE) -C ../lib
 	$(MAKE) -C ../src
-	$(AM_V_GEN)env SOURCE_DATE_EPOCH=0 $(HELP2MAN) \
+	$(AM_V_GEN)env SOURCE_DATE_EPOCH=$(SOURCETIME_HELP2MAN) $(HELP2MAN) \
 		--name="Internationalized Domain Names command line tool" \
 		--output=$@ $(top_builddir)/src/idn$(EXEEXT)
 

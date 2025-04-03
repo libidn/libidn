@@ -202,6 +202,28 @@ AC_ARG_ENABLE(doc,
     enable_doc=$enableval, enable_doc=yes)
 AM_CONDITIONAL(ENABLE_DOC, test "$enable_doc" != "no")
 
+st_help2man=0
+st_touch=197001010000.00
+st_pot="1970-01-01 00:00+0000"
+AC_MSG_CHECKING([for timestamps of last git commit])
+if test -e "$srcdir"/.git && command -v git > /dev/null; then
+   if tmp=$(git log -1 --format=%cd --date=unix); then
+     st_help2man="$tmp"
+   fi
+   if tmp=$(env TZ=UTC0 git log -1 --format=%cd --date=format-local:"%Y-%m-%d %H:%M+0000"); then
+     st_pot="$tmp"
+   fi
+   if tmp=$(env TZ=UTC0 git log -1 --format=%cd --date=format-local:%Y%m%d%H%M.%S); then
+      st_touch="$tmp"
+   fi
+fi
+AC_SUBST(SOURCETIME_HELP2MAN, "${SOURCETIME_HELP2MAN:-$st_help2man}")
+AC_SUBST(SOURCETIME_POT, "${SOURCETIME_POT:-$st_pot}")
+AC_MSG_RESULT(help2man $SOURCETIME_HELP2MAN pot $SOURCETIME_POT touch $st_touch)
+env TZ=UTC0 \
+    touch -m -t "$st_touch" \
+          "$srcdir"/NEWS "$srcdir"/doc/$PACKAGE.texi
+
 AC_CONFIG_FILES([
   Makefile
   contrib/doxygen/Doxyfile
