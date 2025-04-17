@@ -159,6 +159,32 @@ B-RockyLinux9:
   image: rockylinux:9
   extends: .almarocky
 
+B-AlmaLinux10:
+  stage: build
+  tags: [ saas-linux-medium-amd64 ]
+  image: almalinux:10-kitten
+  variables:
+    PKGS: patch diffutils autoconf automake libtool gettext-devel git wget perl make gperf graphviz valgrind dotnet-sdk-9.0
+    CRBPKGS: texinfo help2man gtk-doc
+    EPELPKGS: gengetopt
+  before_script:
+  - cat /etc/os-release
+  - time dnf install -y ${PKGS}
+  - time dnf --enablerepo=crb install -y ${CRBPKGS}
+  - time dnf install -y epel-release
+  - time dnf install -y ${EPELPKGS}
+  - cc --version
+  script:
+  - !reference [.gnulib-fetch, script]
+  - time ./bootstrap --skip-po --no-git
+  - time ./configure --enable-gcc-warnings=error
+  - grep '^HAVE_DOTNET = 1$' Makefile > /dev/null
+  - grep '^HAVE_MONO = $' Makefile > /dev/null
+  - time make syntax-check
+  - time make -j$(nproc) V=1 VERBOSE=t check
+  - time make -j$(nproc) V=1 VERBOSE=t distcheck AM_DISTCHECK_DVI_TARGET=
+  - !reference [.save-artifacts, script]
+
 .pureosdebian: &pureosdebian
   tags: [ saas-linux-medium-amd64 ]
   stage: build
