@@ -30,7 +30,8 @@ default:
     expire_in: 2 weeks
     when: always
     paths:
-    - ./config.h
+    - ./**/config.status
+    - ./**/config.h
     - ./**/*.log
     - ./out/$CI_JOB_NAME_SLUG/**
 
@@ -347,12 +348,7 @@ B-Debian9:
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) dist
   - time make -j$(nproc) syntax-check
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - !reference [.save-artifacts, script]
 
 B-Debian-testing:
   image: debian:testing-slim
@@ -371,12 +367,7 @@ B-Debian-testing:
   - git clone --depth=1 https://salsa.debian.org/debian/libidn.git debian-libidn
   - debian-libidn/debian/tests/idn
   - debian-libidn/debian/tests/libidn
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - !reference [.save-artifacts, script]
 
 B-Fedora-latest:
   image: fedora:latest
@@ -391,12 +382,7 @@ B-Fedora-latest:
   - time ./configure --enable-java --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
   - time make -j$(nproc) distcheck V=1 VERBOSE=t
-  - git diff --exit-code # nothing should change version controlled files
-  - sha256sum *.tar.*
-  - mkdir -pv out/$CI_JOB_NAME_SLUG/src out/$CI_JOB_NAME_SLUG/log
-  - find config.h *.log tests/*.log -exec mv -v {} out/$CI_JOB_NAME_SLUG/log \;
-  - mv -v *-src.tar.* out/$CI_JOB_NAME_SLUG/src/
-  - mv -v *.tar.* out/$CI_JOB_NAME_SLUG/
+  - !reference [.save-artifacts, script]
 
 B-Guix:
   rules:
