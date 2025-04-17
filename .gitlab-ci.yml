@@ -1080,13 +1080,26 @@ Debian12-ppc64:
   - time ../configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
+Fedora41:
+  image: fedora:41
+  stage: test
+  needs: [B-Guix]
+  before_script:
+  - cat /etc/os-release
+  - dnf -y install make gcc diffutils valgrind
+  script:
+  - tar xfa out/b-guix/libidn-*.tar.gz
+  - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
+  - time ./configure --enable-gcc-warnings=error
+  - time make -j$(nproc) check V=1 VERBOSE=t
+
 Fedora-latest:
   image: fedora:latest
   stage: test
   needs: [B-Guix]
   before_script:
   - cat /etc/os-release
-  - dnf -y install make gcc diffutils valgrind
+  - dnf -y install make gcc diffutils valgrind awk
   script:
   - tar xfa out/b-guix/libidn-*.tar.gz
   - cd $(tar tfa out/b-guix/libidn-*.tar.gz | head -n1)
