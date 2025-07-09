@@ -34,7 +34,6 @@ exclude_file_name_regexp--sc_indent = '^lib/\(gunibreak\|gunicomp\|gunidecomp\).
 exclude_file_name_regexp--sc_prohibit_always_true_header_tests = ^lib/toutf8.c$$
 exclude_file_name_regexp--sc_prohibit_atoi_atof = ^examples/example2.c$$
 exclude_file_name_regexp--sc_prohibit_empty_lines_at_EOF = ^csharp/libidn.suo|csharp/libidn_PPC.suo$$
-exclude_file_name_regexp--sc_prohibit_strncpy = ^src/idn.c$$
 exclude_file_name_regexp--sc_trailing_blank = ^doc/components.fig|m4/pkg.m4|contrib/doxygen/Doxyfile.(in|orig)|gl/top/README-release.diff|csharp/|java/src/|lib/gen-unicode-tables.pl|lib/(gunibreak|gunicomp|gunidecomp).h$$
 exclude_file_name_regexp--sc_two_space_separator_in_usage = ^cfg.mk$$
 exclude_file_name_regexp--sc_unportable_grep_q = ^gl/top/README-release.diff$$
