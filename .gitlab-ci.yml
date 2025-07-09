@@ -1028,19 +1028,6 @@ OracleLinux7:
   - time ./configure --enable-gcc-warnings=error
   - time make -j$(nproc) check V=1 VERBOSE=t
 
-Debian3:
-  image: debian/eol:woody
-  stage: test
-  needs: [B-Guix]
-  before_script:
-  - time apt-get update
-  - time apt-get install -y -qq make gcc libc-dev
-  script:
-  - tar xfz out/b-guix/libidn-*.tar.gz
-  - cd $(tar tfz out/b-guix/libidn-*.tar.gz | head -n1)
-  - time ./configure --enable-gcc-warnings
-  - time make check V=1 VERBOSE=t
-
 Debian3.1:
   image: debian/eol:sarge
   stage: test
