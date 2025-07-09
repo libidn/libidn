@@ -74,7 +74,11 @@ main (void)
   p = stringprep_locale_to_utf8 (buf);
   if (p)
     {
-      strcpy (buf, p);
+      size_t plen = strlen (p);
+      if (plen >= BUFSIZ)
+	plen = BUFSIZ - 1;
+      memcpy (buf, p, plen);
+      buf[plen] = '\0';
       free (p);
     }
   else
