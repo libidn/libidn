@@ -171,7 +171,7 @@ stringprep_apply_table_to_string (uint32_t *ucs4,
  *
  * The @profile contain the #Stringprep_profile instructions to
  * perform.  Your application can define new profiles, possibly
- * re-using the generic stringprep tables that always will be part of
+ * reusing the generic stringprep tables that always will be part of
  * the library, or use one of the currently supported profiles.
  *
  * Return value: Returns %STRINGPREP_OK iff successful, or an
@@ -364,7 +364,7 @@ stringprep_4zi_1 (uint32_t *ucs4, size_t ucs4len, size_t maxucs4len,
  *
  * The @profile contain the #Stringprep_profile instructions to
  * perform.  Your application can define new profiles, possibly
- * re-using the generic stringprep tables that always will be part of
+ * reusing the generic stringprep tables that always will be part of
  * the library, or use one of the currently supported profiles.
  *
  * Return value: Returns %STRINGPREP_OK iff successful, or an
@@ -405,7 +405,7 @@ stringprep_4zi (uint32_t *ucs4, size_t maxucs4len,
  *
  * The @profile contain the #Stringprep_profile instructions to
  * perform.  Your application can define new profiles, possibly
- * re-using the generic stringprep tables that always will be part of
+ * reusing the generic stringprep tables that always will be part of
  * the library, or use one of the currently supported profiles.
  *
  * Return value: Returns %STRINGPREP_OK iff successful, or an error code.
