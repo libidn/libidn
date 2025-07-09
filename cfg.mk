@@ -75,16 +75,8 @@ update-po: refresh-po
 	git commit po/*.po.in \
 		-m "maint: Run 'make update-po' for new translations."
 
-CODESPELL_IGNORE_WORDS_LIST = meu,bu,te,ba,noe,nwe,mye,myu,tye,tim,ede,wich,poin
-exclude_file_name_regexp--sc_codespell = '^gnulib|doc/specifications/.*|doc/gdoc|po/.*\.po\.in|fuzz/libidn_(stringprep|toascii|tounicode)_fuzzer.in/.*$$'
-sc_codespell:
-	@if ! command -v codespell > /dev/null; then			\
-	   echo 1>&2 '$(ME): sc_codespell: codespell is missing';	\
-	else								\
-	   codespell --ignore-words-list $(CODESPELL_IGNORE_WORDS_LIST)	\
-		$$(git -C $(srcdir) ls-files | egrep -v			\
-			$(exclude_file_name_regexp--sc_codespell));	\
-	fi
+codespell_ignore_words_list = meu,bu,te,ba,noe,nwe,mye,myu,tye,tim,ede,wich,poin
+exclude_file_name_regexp--sc_codespell = ^gnulib|doc/specifications/.*|doc/gdoc|po/.*\.po\.in|fuzz/libidn_(stringprep|toascii|tounicode)_fuzzer.in/.*$$
 
 sc_libtool_version_bump:
 	@git -C $(srcdir) diff v$(PREV_VERSION).. | grep '^+AC_SUBST(LT' > /dev/null
