@@ -1055,7 +1055,7 @@ Debian4:
   - time make check V=1 VERBOSE=t
 
 Debian10:
-  image: debian:10-slim
+  image: debian/eol:buster-slim
   stage: test
   needs: [B-Guix]
   before_script:
